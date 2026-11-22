@@ -158,8 +158,8 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px 16px 30p
 'use strict';
 const API = 'https://ujqjgqkjocdtlgvrydae.supabase.co/functions/v1/drugreq';
 const HOSPITAL = 'โรงพยาบาลจุฬารัตน์ 9 แอร์พอร์ต';
-const ROLE_TH = {user:'เจ้าหน้าที่', pharm:'เภสัชกร', admin:'ผู้ดูแลระบบ'};
-const ST_TH = {submitted:'รอเภสัชกรตรวจ', approved:'อนุมัติแล้ว รอรับยา', received:'รับยาแล้ว', cancelled:'ยกเลิก'};
+const ROLE_TH = {user:'เจ้าหน้าที่', pharm:'เจ้าหน้าที่ Substock', admin:'ผู้ดูแลระบบ'};
+const ST_TH = {submitted:'รอ Substock ตรวจ', approved:'อนุมัติแล้ว รอรับยา', received:'รับยาแล้ว', cancelled:'ยกเลิก'};
 const RANK = {user:1, pharm:2, admin:3};
 const FORMS = [
   {key:'main', sup:'main', buy:false, title:'ใบเบิกยา / เวชภัณฑ์', from:'เภสัชกรรม (คลังยา/เวชภัณฑ์)', short:'คลังยา'},
@@ -185,7 +185,7 @@ const ERR = {
   bad_pw:'รหัสผ่านไม่ถูกต้อง', no_user:'ไม่พบรหัสพนักงานนี้', locked:'ใส่รหัสผิดหลายครั้ง ถูกล็อก 10 นาที', last_admin:'ต้องมีผู้ดูแลระบบอย่างน้อย 1 คน',
   bad_qty:'จำนวนไม่ถูกต้อง', in_round:'รายการนี้ถูกรวมในรอบเบิกแล้ว ลบไม่ได้', network:'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจสอบอินเทอร์เน็ต',
 };
-function errText(c){ c = String(c || ''); if (c.startsWith('open_round:')) return `ห้องนี้มีรอบเบิกที่รอเภสัชกรตรวจอยู่ (รอบ #${c.split(':')[1]}) ต้องอนุมัติหรือยกเลิกก่อนสร้างรอบใหม่`; if (c.startsWith('unknown_drug:')) return 'ไม่พบรหัสยา ' + c.split(':')[1]; return ERR[c] || ('เกิดข้อผิดพลาด: ' + c); }
+function errText(c){ c = String(c || ''); if (c.startsWith('open_round:')) return `ห้องนี้มีรอบเบิกที่รอ Substock ตรวจอยู่ (รอบ #${c.split(':')[1]}) ต้องอนุมัติหรือยกเลิกก่อนสร้างรอบใหม่`; if (c.startsWith('unknown_drug:')) return 'ไม่พบรหัสยา ' + c.split(':')[1]; return ERR[c] || ('เกิดข้อผิดพลาด: ' + c); }
 
 // ---------- state & api ----------
 const S = { token: ls.get('fs_token'), user: null, rooms: [], drugs: new Map(), names: {}, cache: {} };
@@ -711,7 +711,7 @@ async function newRoundView(room){
   <div class="row" style="margin-bottom:10px"><a href="#/room/${encodeURIComponent(room)}/rounds">← ${esc(roomName(room))}</a></div>
   <div class="card">
     <h2>สร้างรอบเบิกใหม่ — ${esc(roomName(room))}</h2>
-    <div class="steps"><span class="on">1. อัปโหลดยอดจ่ายจาก Centrix</span><span>2. ตรวจรายการ</span><span>3. ส่งให้เภสัชกรตรวจ</span></div>
+    <div class="steps"><span class="on">1. อัปโหลดยอดจ่ายจาก Centrix</span><span>2. ตรวจรายการ</span><span>3. ส่งให้ Substock ตรวจ</span></div>
     <div class="grid2" style="margin-top:12px">
       <label class="f">ยอดจ่ายตั้งแต่วันที่<input type="date" id="ps" value="${isoDate(lastMon)}"></label>
       <label class="f">ถึงวันที่<input type="date" id="pe" value="${isoDate(lastSun)}"></label>
@@ -775,10 +775,10 @@ function bindNewRound(room){
       ${unknown.length ? `<div class="note bad" style="margin-bottom:8px"><b>ไม่พบรหัสยาในระบบ ${unknown.length} รายการ</b> (จะไม่ถูกนำมาคิด): ${esc(unknown.slice(0, 40).join(', '))}${unknown.length > 40 ? ' …' : ''}
         ${can('admin') && st.fileInfo ? `<div style="margin-top:8px"><button class="btn sm" id="addu">เพิ่ม ${unknown.length} รหัสนี้เข้ารายการยา</button> <span class="sub">ใช้ชื่อและหน่วยจากไฟล์ (1 หน่วยเบิก = 1 หน่วยจ่าย แก้ภายหลังได้ที่ตั้งค่าระบบ)</span></div>` : ''}</div>` : ''}
       ${stuckN ? `<div class="note warn" style="margin-bottom:8px"><b>${stuckN} รายการใกล้หมด แต่เติม 1 หน่วยเบิกแล้วจะเกิน Max</b> — ระบบยังไม่เบิกให้ ควรตรวจว่า Max เล็กกว่า 1 หน่วยเบิก (เช่น 1 กล่อง) หรือห่างจาก Min ไม่พอหรือไม่</div>` : ''}
-      ${noFix.length ? `<div class="note warn" style="margin-bottom:8px">มียอดจ่ายแต่ไม่มี Fixed ในห้องนี้ ${noFix.length} รายการ — ระบบจะไม่เติมให้อัตโนมัติ (เภสัชกรเพิ่มยอดเองได้ในขั้นตรวจ)</div>` : ''}
+      ${noFix.length ? `<div class="note warn" style="margin-bottom:8px">มียอดจ่ายแต่ไม่มี Fixed ในห้องนี้ ${noFix.length} รายการ — ระบบจะไม่เติมให้อัตโนมัติ (Substock เพิ่มยอดเองได้ในขั้นตรวจ)</div>` : ''}
       ${!st.file ? '<div class="note warn" style="margin-bottom:8px">ไม่มีไฟล์ยอดจ่าย — ระบบคิดยอดเติมจากยอดฉุกเฉิน/ส่งคืนเท่านั้น</div>' : ''}
-      <label class="f" style="margin-top:6px">หมายเหตุถึงเภสัชกร (ถ้ามี)<textarea id="nt" rows="2"></textarea></label>
-      <div class="row end" style="margin-top:12px"><button class="btn pri" id="sb">ส่งให้เภสัชกรตรวจ →</button></div>
+      <label class="f" style="margin-top:6px">หมายเหตุถึง Substock (ถ้ามี)<textarea id="nt" rows="2"></textarea></label>
+      <div class="row end" style="margin-top:12px"><button class="btn pri" id="sb">ส่งให้ Substock ตรวจ →</button></div>
     </div>
     <div class="card" style="padding:0"><div class="row" style="padding:12px"><b class="grow">ตัวอย่างรายการที่ต้องเติม</b><span class="sub">${refill.length} รายการ</span></div>
     <div class="tw" style="border:0;border-top:1px solid var(--line);border-radius:0;max-height:50vh"><table class="t"><thead><tr><th>รหัส</th><th>รายการ</th><th class="n">Min</th><th class="n">Max</th><th class="n">ยกมา</th><th class="n">ใช้</th><th class="n">คงเหลือ</th><th class="n">เติม</th><th>หน่วย</th><th class="n">หลังเติม</th></tr></thead>
@@ -795,7 +795,7 @@ function bindNewRound(room){
       try {
         const r = await api('createRound', {room, usage: st.usage, file: st.file ? st.file + (st.stores && st.stores.length ? ' | ' + st.stores.join(', ') : '') : null, period_start: $('#ps').value, period_end: $('#pe').value, req_date: $('#rd').value, note: $('#nt').value.trim()});
         toast(`สร้างรอบ #${r.id} แล้ว`); go(`#/round/${r.id}`);
-      } catch (er){ toast(errText(er.message), true); btn.disabled = false; btn.textContent = 'ส่งให้เภสัชกรตรวจ →'; }
+      } catch (er){ toast(errText(er.message), true); btn.disabled = false; btn.textContent = 'ส่งให้ Substock ตรวจ →'; }
     };
   };
 }
@@ -821,7 +821,7 @@ async function roundView(id){
     </div>
     ${r.status !== 'cancelled' ? `<div class="steps" style="margin-top:10px">
       <span class="done">ส่งยอด · ${esc(who(r.created_by))} ${thDateTime(r.created_at)}</span>
-      <span class="${si >= 1 ? 'done' : 'on'}">เภสัชกรตรวจ/อนุมัติ${r.approved_by ? ` · ${esc(who(r.approved_by))} ${thDateTime(r.approved_at)}` : ''}</span>
+      <span class="${si >= 1 ? 'done' : 'on'}">Substock ตรวจ/อนุมัติ${r.approved_by ? ` · ${esc(who(r.approved_by))} ${thDateTime(r.approved_at)}` : ''}</span>
       <span class="${si >= 2 ? 'done' : si === 1 ? 'on' : ''}">ห้องยารับยา${r.received_by ? ` · ${esc(who(r.received_by))} ${thDateTime(r.received_at)}` : ''}</span></div>`
       : `<div class="note" style="margin-top:10px">ยกเลิกโดย ${esc(who(r.cancelled_by))} ${thDateTime(r.cancelled_at)}</div>`}
     ${r.note ? `<div class="note" style="margin-top:10px">หมายเหตุ: ${esc(r.note)}</div>` : ''}
@@ -833,7 +833,7 @@ async function roundView(id){
     <div class="row end">
       ${r.status === 'submitted' && (r.created_by === S.user.id || can('pharm')) ? '<button class="btn bad" id="cx">ยกเลิกรอบนี้</button>' : ''}
       ${editable ? '<button class="btn" id="sv" disabled>บันทึกการแก้ไข</button><button class="btn ok" id="ap">✓ อนุมัติ</button>' : ''}
-      ${r.status === 'submitted' && !can('pharm') ? '<span class="sub">รอเภสัชกรตรวจและอนุมัติ</span>' : ''}
+      ${r.status === 'submitted' && !can('pharm') ? '<span class="sub">รอ Substock ตรวจและอนุมัติ</span>' : ''}
       ${r.status === 'approved' ? '<button class="btn ok" id="rc">ยืนยันรับยาครบแล้ว</button>' : ''}
     </div>
   </div>
@@ -876,7 +876,7 @@ function bindRound(editable){
       <td class="n">${l.min === null || l.min === undefined ? '' : fmt(l.min)}</td><td class="n">${fmt(l.fixed)}</td><td class="n">${fmt(l.bf)}</td><td class="n">${l.emerg ? fmt(l.emerg) : ''}</td><td class="n">${l.ret ? fmt(l.ret) : ''}</td>
       <td class="n">${fmt(l.usage)}</td><td class="n">${fmt(l.rem)}${l.short ? ' <span class="chip short">ขาด</span>' : ''}${flagChips({...flags(l.fixed, l.min, l.rem, val, l.g.pack), over: false})}</td>
       <td class="n">${fmt(l.suggest)}</td>
-      <td class="n">${editable ? `<input class="q ${ed !== undefined || (l.adjust !== null && l.adjust !== l.suggest) ? 'chg' : ''}" type="number" min="0" step="1" value="${val}" data-c="${esc(l.code)}">` : `<b>${fmt(l.final)}</b>${l.adjust !== null && l.adjust !== l.suggest ? ' <span class="chip buy" title="เภสัชกรแก้จาก ' + fmt(l.suggest) + '">แก้</span>' : ''}`}</td>
+      <td class="n">${editable ? `<input class="q ${ed !== undefined || (l.adjust !== null && l.adjust !== l.suggest) ? 'chg' : ''}" type="number" min="0" step="1" value="${val}" data-c="${esc(l.code)}">` : `<b>${fmt(l.final)}</b>${l.adjust !== null && l.adjust !== l.suggest ? ' <span class="chip buy" title="Substock แก้จาก ' + fmt(l.suggest) + '">แก้</span>' : ''}`}</td>
       <td>${esc(l.g.unit || '')} <span class="sub">×${fmt(l.g.pack)}</span></td><td class="n" data-after="${esc(l.code)}">${afterCell(l, val)}</td><td>${srcChips(l.g)}</td>
       ${showCf ? `<td class="n">${fmt(l.cf)}</td>` : ''}</tr>`;
     }).join('') : `<tr><td colspan="15" class="empty">ไม่มีรายการ</td></tr>`;
@@ -958,7 +958,7 @@ async function adminView(tab){
   if (tab === 'roles'){
     const s = await api('staffList');
     return [head + `<div class="card"><h3>สิทธิ์ในระบบเบิกยาห้องยา</h3><div class="sub" style="margin-bottom:10px">บัญชีพนักงานใช้ร่วมกับระบบเบิกพัสดุ (เพิ่ม/ลบพนักงานที่ระบบเบิกพัสดุ) แต่สิทธิ์ตั้งแยกได้ที่นี่<br>
-      <b>เจ้าหน้าที่</b>: สร้างรอบเบิก บันทึกฉุกเฉิน/คืน ยืนยันรับยา · <b>เภสัชกร</b>: + แก้ยอดและอนุมัติ · <b>ผู้ดูแลระบบ</b>: + ตั้งค่า Fixed รายการยา และสิทธิ์</div>
+      <b>เจ้าหน้าที่</b>: สร้างรอบเบิก บันทึกฉุกเฉิน/คืน ยืนยันรับยา · <b>เจ้าหน้าที่ Substock</b>: + แก้ยอดและอนุมัติ · <b>ผู้ดูแลระบบ</b>: + ตั้งค่า Fixed รายการยา และสิทธิ์</div>
       <input type="search" id="sq" placeholder="ค้นหา" style="width:100%;margin-bottom:10px">
       <div class="tw"><table class="t"><thead><tr><th>รหัสพนักงาน</th><th>ชื่อ</th><th>สิทธิ์</th></tr></thead><tbody id="sb">
       ${s.staff.map(x => `<tr data-s="${esc((x.id + ' ' + x.first + ' ' + x.last).toUpperCase())}"><td>${esc(x.id)}</td><td>${esc(x.first)} ${esc(x.last)}</td><td><select data-id="${esc(x.id)}">${Object.entries(ROLE_TH).map(([k,v]) => `<option value="${k}" ${x.role === k ? 'selected' : ''}>${v}</option>`).join('')}</select></td></tr>`).join('')}
