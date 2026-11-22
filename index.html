@@ -219,7 +219,11 @@ async function boot(){
 function logout(expired){ S.token = null; S.user = null; ls.del('fs_token'); if (expired) toast(ERR.auth, true); location.hash = ''; render(); }
 
 // ---------- formula (เหมือนคอลัมน์ U ใน Excel) ----------
-function suggest(G, K, L, D){ if (!(G > 0)) return 0; const rem = K - L; if (D > G) return rem > G/2 ? 0 : 1; if (G - rem <= 0) return 0; return Math.round((G - rem) / D); }
+function suggest(G, K, L, D, mn = null){
+  if (!(G > 0)) return 0; const rem = K - L;
+  if (mn !== null && mn !== undefined){ if (rem > mn) return 0; if (D > G) return 1; return G - rem <= 0 ? 0 : Math.max(1, Math.round((G - rem) / D)); }
+  if (D > G) return rem > G/2 ? 0 : 1; if (G - rem <= 0) return 0; return Math.round((G - rem) / D);
+}
 
 // ---------- routing ----------
 window.addEventListener('hashchange', render);
@@ -328,7 +332,7 @@ async function roomView(room, tab){
   if (!S.rooms.find(r => r.code === room)) return ['<div class="empty">ไม่พบห้องยา</div>'];
   const d = await api('roomData', {room, limit:60});
   S.cache.room = {room, ...d};
-  const tabs = [['rounds','รอบเบิก'],['moves',`เบิกฉุกเฉิน / ส่งคืน${d.moves.length ? ` (${d.moves.length})` : ''}`],['fixed','Fixed stock'],['report','รายงานยอดใช้']];
+  const tabs = [['rounds','รอบเบิก'],['moves',`เบิกฉุกเฉิน / ส่งคืน${d.moves.length ? ` (${d.moves.length})` : ''}`],['fixed','Min-Max / Fixed'],['report','รายงานยอดใช้']];
   const head = `<div class="row" style="margin-bottom:10px"><h2 style="margin:0;font-size:21px" class="grow">${esc(roomName(room))}</h2></div>
     <div class="tabs">${tabs.map(([k,t]) => `<a href="#/room/${encodeURIComponent(room)}/${k}" class="${tab === k ? 'on' : ''}">${t}</a>`).join('')}</div>`;
   if (tab === 'moves') return [head + movesTab(room, d), () => bindMoves(room)];
@@ -434,19 +438,19 @@ async function delMove(id){ if (!confirm('ลบรายการนี้?')) 
 // ---------- fixed ----------
 function fixedTab(room, d){
   const bal = new Map(d.balance.map(b => [b.code, b.qty]));
-  const rows = d.fixed.map(f => ({...drug(f.code), fixed: f.qty, bal: bal.has(f.code) ? bal.get(f.code) : null})).sort((a,b) => a.code.localeCompare(b.code));
+  const rows = d.fixed.map(f => ({...drug(f.code), fixed: f.qty, min: f.min ?? null, bal: bal.has(f.code) ? bal.get(f.code) : null})).sort((a,b) => a.code.localeCompare(b.code));
   S.cache.fixedRows = rows;
   return `<div class="card">
-    <div class="row"><div class="grow"><h3 style="margin:0">Fixed stock และยอดคงเหลือ</h3>
-      <div class="sub">Fixed ${rows.length.toLocaleString()} รายการ · หน่วยเป็น "หน่วยจ่าย" · ยอดคงเหลือ = ยอดยกไปหลังรอบล่าสุดที่อนุมัติ</div></div>
-      ${can('admin') ? `<button class="btn" onclick="importRoomModal('${esc(room)}','fixed')">นำเข้า Fixed จาก Excel</button>
+    <div class="row"><div class="grow"><h3 style="margin:0">Min-Max และยอดคงเหลือ</h3>
+      <div class="sub">${rows.length.toLocaleString()} รายการ · หน่วยเป็น "หน่วยจ่าย" · <b>มี Min</b>: เติมเมื่อคงเหลือ ≤ Min ให้กลับไปใกล้ Max · <b>ไม่มี Min</b>: เติมให้เต็ม Max ทุกรอบ (แบบ Fixed เดิม) · คงเหลือ = ยอดยกไปหลังรอบล่าสุดที่อนุมัติ</div></div>
+      ${can('admin') ? `<button class="btn" onclick="importRoomModal('${esc(room)}','fixed')">นำเข้า Min-Max จาก Excel</button>
       <button class="btn" onclick="importRoomModal('${esc(room)}','balance')">นำเข้ายอดตรวจนับ/ยอดยกมา</button>` : ''}
     </div>
-    ${can('admin') ? `<div class="row" style="margin-top:12px;align-items:flex-end"><div class="grow" style="min-width:240px">${drugPicker('fp','เพิ่ม/แก้ Fixed ของยา…')}</div><input type="number" id="fq" placeholder="Fixed (หน่วยจ่าย)" min="0" step="any" style="width:160px"><button class="btn pri" id="fadd">บันทึก Fixed</button></div>` : ''}
+    ${can('admin') ? `<div class="row" style="margin-top:12px;align-items:flex-end"><div class="grow" style="min-width:240px">${drugPicker('fp','เพิ่ม/แก้ Min-Max ของยา…')}</div><input type="number" id="fmn" placeholder="Min" min="0" step="any" style="width:110px"><input type="number" id="fq" placeholder="Max" min="0" step="any" style="width:110px"><button class="btn pri" id="fadd">บันทึก</button></div>` : ''}
   </div>
   <div class="card" style="padding:0">
     <div class="row" style="padding:12px"><input type="search" id="fs" placeholder="ค้นหารหัส/ชื่อยา" class="grow"><span class="sub" id="fcnt"></span></div>
-    <div class="tw" style="border:0;border-top:1px solid var(--line);border-radius:0"><table class="t"><thead><tr><th>รหัส</th><th>รายการ</th><th>หน่วยเบิก</th><th class="n">หน่วยจ่าย/หน่วยเบิก</th><th class="n">Fixed</th><th class="n">คงเหลือ</th><th>แหล่ง</th></tr></thead><tbody id="fb"></tbody></table></div>
+    <div class="tw" style="border:0;border-top:1px solid var(--line);border-radius:0"><table class="t"><thead><tr><th>รหัส</th><th>รายการ</th><th>หน่วยเบิก</th><th class="n">หน่วยจ่าย/หน่วยเบิก</th><th class="n">Min</th><th class="n">Max</th><th class="n">คงเหลือ</th><th>แหล่ง</th></tr></thead><tbody id="fb"></tbody></table></div>
   </div>`;
 }
 function bindFixed(room){
@@ -455,21 +459,34 @@ function bindFixed(room){
     const rows = S.cache.fixedRows.filter(r => !q || r.code.includes(q) || r.name.toUpperCase().includes(q));
     $('#fcnt').textContent = `${rows.length.toLocaleString()} รายการ`;
     $('#fb').innerHTML = rows.length ? rows.map(r => `<tr><td class="cd">${esc(r.code)}</td><td class="nm">${esc(r.name)}</td><td>${esc(r.unit || '')}</td><td class="n">${fmt(r.pack)}</td>
+      <td class="n">${can('admin') ? `<input class="q" type="number" step="any" min="0" value="${r.min ?? ''}" placeholder="-" data-c="${esc(r.code)}" data-t="min">` : (r.min === null ? '<span class="sub">-</span>' : fmt(r.min))}</td>
       <td class="n">${can('admin') ? `<input class="q" type="number" step="any" min="0" value="${r.fixed}" data-c="${esc(r.code)}" data-t="fixed">` : fmt(r.fixed)}</td>
       <td class="n">${can('admin') ? `<input class="q" type="number" step="any" value="${r.bal ?? ''}" placeholder="=Fixed" data-c="${esc(r.code)}" data-t="balance">` : (r.bal === null ? '<span class="sub">=Fixed</span>' : fmt(r.bal))}</td>
-      <td>${srcChips(r)}</td></tr>`).join('') : '<tr><td colspan="7" class="empty">ไม่มีข้อมูล</td></tr>';
+      <td>${srcChips(r)}</td></tr>`).join('') : '<tr><td colspan="8" class="empty">ไม่มีข้อมูล</td></tr>';
   };
   $('#fs').oninput = draw; draw();
   $('#fb').addEventListener('change', async e => {
     const i = e.target.closest('input.q'); if (!i) return;
-    try { await api(i.dataset.t === 'fixed' ? 'setFixed' : 'setBalance', {room, code: i.dataset.c, qty: Number(i.value) || 0}); i.classList.add('chg'); toast('บันทึกแล้ว'); const r = S.cache.fixedRows.find(x => x.code === i.dataset.c); if (r) r[i.dataset.t === 'fixed' ? 'fixed' : 'bal'] = Number(i.value) || 0; }
+    const r = S.cache.fixedRows.find(x => x.code === i.dataset.c), t = i.dataset.t;
+    try {
+      if (t === 'balance') await api('setBalance', {room, code: r.code, qty: Number(i.value) || 0});
+      else {
+        const mx = t === 'fixed' ? (Number(i.value) || 0) : r.fixed, mn = t === 'min' ? (i.value === '' ? null : Number(i.value)) : r.min;
+        if (mn !== null && mn >= mx) toast('Min ควรน้อยกว่า Max', true);
+        await api('setFixed', {room, code: r.code, qty: mx, min: mn}); r.fixed = mx; r.min = mn;
+      }
+      if (t === 'balance') r.bal = Number(i.value) || 0;
+      i.classList.add('chg'); toast('บันทึกแล้ว');
+    }
     catch (er){ toast(errText(er.message), true); }
   });
   if (can('admin')){
-    const pk = bindPicker('fp', d => { const r = S.cache.fixedRows.find(x => x.code === d.code); $('#fq').value = r ? r.fixed : ''; $('#fq').focus(); });
+    const pk = bindPicker('fp', d => { const r = S.cache.fixedRows.find(x => x.code === d.code); $('#fq').value = r ? r.fixed : ''; $('#fmn').value = r && r.min !== null ? r.min : ''; $('#fmn').focus(); });
     $('#fadd').onclick = async () => {
       if (!pk.code) return toast('เลือกยาจากรายการก่อน', true);
-      try { await api('setFixed', {room, code: pk.code, qty: Number($('#fq').value) || 0}); toast('บันทึกแล้ว'); render(); } catch (er){ toast(errText(er.message), true); }
+      const mn = $('#fmn').value === '' ? null : Number($('#fmn').value), mx = Number($('#fq').value) || 0;
+      if (mn !== null && mn >= mx) return toast('Min ต้องน้อยกว่า Max', true);
+      try { await api('setFixed', {room, code: pk.code, qty: mx, min: mn}); toast('บันทึกแล้ว'); render(); } catch (er){ toast(errText(er.message), true); }
     };
   }
 }
@@ -503,7 +520,7 @@ async function loadReport(room, n){
       <div class="row" style="margin-top:12px"><div class="seg" id="rf"><button class="on" data-f="flag">ควรทบทวน</button><button data-f="low">Fixed น้อยไป/เคยขาด</button><button data-f="high">Fixed มากไป</button><button data-f="nofix">มียอดใช้แต่ไม่มี Fixed</button><button data-f="all">ทั้งหมด</button></div>
       <input type="search" id="rs" placeholder="ค้นหา" class="grow"><button class="btn sm" id="rx">ส่งออก Excel</button></div>
     </div>
-    <div class="card" style="padding:0"><div class="tw" style="border:0"><table class="t"><thead><tr><th>รหัส</th><th>รายการ</th><th class="n">Fixed</th><th class="n">ใช้เฉลี่ย</th><th class="n">ต่ำสุด</th><th class="n">สูงสุด</th><th class="n">พอใช้ (สัปดาห์)</th><th class="n">ครั้งที่ขาด</th><th>ข้อสังเกต</th></tr></thead><tbody id="rb"></tbody></table></div></div>`;
+    <div class="card" style="padding:0"><div class="tw" style="border:0"><table class="t"><thead><tr><th>รหัส</th><th>รายการ</th><th class="n">Max</th><th class="n">ใช้เฉลี่ย</th><th class="n">ต่ำสุด</th><th class="n">สูงสุด</th><th class="n">พอใช้ (สัปดาห์)</th><th class="n">ครั้งที่ขาด</th><th>ข้อสังเกต</th></tr></thead><tbody id="rb"></tbody></table></div></div>`;
     let f = 'flag';
     const FL = {low:'<span class="chip short">Fixed น้อยไป</span>', high:'<span class="chip main">Fixed มากไป</span>', nofix:'<span class="chip buy">ไม่มี Fixed</span>'};
     const draw = () => {
@@ -632,16 +649,18 @@ function importWizard({title, fields, labels, required, note, extra = '', onRows
 function importRoomModal(room, kind){
   const isFix = kind === 'fixed';
   importWizard({
-    title: isFix ? `นำเข้า Fixed stock — ${roomName(room)}` : `นำเข้ายอดตรวจนับ / ยอดยกมา — ${roomName(room)}`,
-    fields: {code: /รหัส|code/i, qty: isFix ? [/fixed.*จ่าย/i, /fixed/i, /จำนวน|qty|quantity/i] : [/ตรวจนับ/i, /คงเหลือ|bf/i, /ยอด|จำนวน|qty|quantity/i]},
-    labels: {code:'รหัสยา', qty: isFix ? 'Fixed (หน่วยจ่าย)' : 'ยอดนับได้ (หน่วยจ่าย)'},
+    title: isFix ? `นำเข้า Min-Max — ${roomName(room)}` : `นำเข้ายอดตรวจนับ / ยอดยกมา — ${roomName(room)}`,
+    fields: isFix ? {code: /รหัส|code/i, qty: [/max/i, /fixed.*จ่าย/i, /fixed/i, /จำนวน|qty|quantity/i], min: [/min/i]}
+                  : {code: /รหัส|code/i, qty: [/ตรวจนับ|นับได้|count/i, /คงเหลือ|bf/i, /ยอด|จำนวน|qty|quantity/i]},
+    labels: {code:'รหัสยา', qty: isFix ? 'Max หรือ Fixed (หน่วยจ่าย)' : 'ยอดนับได้ (หน่วยจ่าย)', min:'Min (หน่วยจ่าย) — ไม่มีก็ได้'},
     required: ['code','qty'],
-    note: isFix ? 'ใช้ไฟล์ Excel ที่มีคอลัมน์รหัสยา (Hospro/Centrix) และจำนวน Fixed เป็น<b>หน่วยจ่าย</b> เช่น ชีต "FIX STOCK - Detail" คอลัมน์ "Fixed stock (หน่วยจ่ายยา)"'
+    note: isFix ? 'ไฟล์ Excel ที่มีคอลัมน์รหัสยา + <b>Max</b> (+ <b>Min</b> ถ้ามี) เป็น<b>หน่วยจ่าย</b> · ถ้าไม่เลือกคอลัมน์ Min ยาจะใช้สูตร Fixed เดิม (เติมให้เต็ม Max ทุกรอบ)'
                 : 'ใช้หลังตรวจนับประจำปี หรือเมื่อเริ่มใช้ระบบครั้งแรก ยอดนี้จะเป็น "ยอดยกมา" ของรอบเบิกถัดไป (ยาที่ไม่มียอดยกมา ระบบจะถือว่าเริ่มต้นเต็ม Fixed)',
-    extra: `<label class="row" style="margin-top:10px;font-size:14px"><input type="checkbox" id="wr" ${isFix ? 'checked' : ''}> ${isFix ? 'แทนที่ Fixed เดิมของห้องนี้ทั้งหมด (ยาที่ไม่อยู่ในไฟล์ = ไม่มี Fixed)' : 'ล้างยอดยกมาเดิมของห้องนี้ก่อน'}</label>
+    extra: `<label class="row" style="margin-top:10px;font-size:14px"><input type="checkbox" id="wr" ${isFix ? 'checked' : ''}> ${isFix ? 'แทนที่ Min-Max เดิมของห้องนี้ทั้งหมด (ยาที่ไม่อยู่ในไฟล์ = ไม่เติมอัตโนมัติ)' : 'ล้างยอดยกมาเดิมของห้องนี้ก่อน (แนะนำหลังตรวจนับ)'}</label>
       <label class="row" style="font-size:14px"><input type="checkbox" id="wsum"> รหัสซ้ำในไฟล์ให้รวมยอด (เช่น นับแยกหลายจุด)</label>`,
     onRows: async (rows, m) => {
-      const r = await api(isFix ? 'importFixed' : 'importBalance', {room, rows: rows.map(x => ({code:x.code, qty:Number(x.qty) || 0})), replace: $('#wr', m).checked, sum: $('#wsum', m).checked});
+      const hasMin = isFix && rows.some(x => 'min' in x);
+      const r = await api(isFix ? 'importFixed' : 'importBalance', {room, hasMin, rows: rows.map(x => ({code:x.code, qty:toNum(x.qty) || 0, min: hasMin ? (Number.isFinite(toNum(x.min)) ? toNum(x.min) : null) : undefined})), replace: $('#wr', m).checked, sum: $('#wsum', m).checked});
       m.close(); toast(`นำเข้า ${r.n.toLocaleString()} รายการ`);
       if (r.unknown.length) alert(`ไม่พบรหัสยาในระบบ ${r.unknown.length} รายการ (ข้าม):\n` + r.unknown.slice(0, 60).join(', ') + (r.unknown.length > 60 ? ' …' : ''));
       render();
@@ -720,7 +739,7 @@ function bindNewRound(room){
   });
   $('#nou').onclick = () => { st.usage = {}; st.file = null; preview(); };
   const preview = () => {
-    const d = st.d, fx = new Map(d.fixed.map(f => [f.code, f.qty])), bal = new Map(d.balance.map(b => [b.code, b.qty]));
+    const d = st.d, fx = new Map(d.fixed.map(f => [f.code, f.qty])), fmin = new Map(d.fixed.map(f => [f.code, f.min ?? null])), bal = new Map(d.balance.map(b => [b.code, b.qty]));
     const em = {}, rt = {};
     for (const m of d.moves) (m.kind === 'emerg' ? em : rt)[m.code] = ((m.kind === 'emerg' ? em : rt)[m.code] || 0) + m.qty;
     const codes = Object.keys(st.usage);
@@ -731,7 +750,8 @@ function bindNewRound(room){
     const lines = [];
     for (const c of all){
       const G = fx.get(c) || 0, bf = bal.has(c) ? bal.get(c) : G, e = em[c] || 0, t = rt[c] || 0, L = st.usage[c] || 0, g = drug(c);
-      lines.push({code:c, G, bf, e, t, L, rem: bf + e - t - L, s: suggest(G, bf + e - t, L, g.pack), g});
+      const mn = G > 0 ? (fmin.get(c) ?? null) : null;
+      lines.push({code:c, G, mn, bf, e, t, L, rem: bf + e - t - L, s: suggest(G, bf + e - t, L, g.pack, mn), g});
     }
     const refill = lines.filter(l => l.s > 0), short = lines.filter(l => l.rem < 0 && l.G > 0);
     $$('.steps span')[0].className = 'done'; $$('.steps span')[1].className = 'on';
@@ -753,8 +773,8 @@ function bindNewRound(room){
       <div class="row end" style="margin-top:12px"><button class="btn pri" id="sb">ส่งให้เภสัชกรตรวจ →</button></div>
     </div>
     <div class="card" style="padding:0"><div class="row" style="padding:12px"><b class="grow">ตัวอย่างรายการที่ต้องเติม</b><span class="sub">${refill.length} รายการ</span></div>
-    <div class="tw" style="border:0;border-top:1px solid var(--line);border-radius:0;max-height:50vh"><table class="t"><thead><tr><th>รหัส</th><th>รายการ</th><th class="n">Fixed</th><th class="n">ยกมา</th><th class="n">ใช้</th><th class="n">คงเหลือ</th><th class="n">เติม</th><th>หน่วย</th></tr></thead>
-    <tbody>${refill.sort((a,b) => a.code.localeCompare(b.code)).map(l => `<tr class="${l.rem < 0 && l.G > 0 ? 'neg' : ''}"><td class="cd">${esc(l.code)}</td><td class="nm">${esc(l.g.name)}</td><td class="n">${fmt(l.G)}</td><td class="n">${fmt(l.bf)}</td><td class="n">${fmt(l.L)}</td><td class="n">${fmt(l.rem)}</td><td class="n big">${fmt(l.s)}</td><td>${esc(l.g.unit || '')}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">ไม่มีรายการที่ต้องเติม</td></tr>'}</tbody></table></div></div>`;
+    <div class="tw" style="border:0;border-top:1px solid var(--line);border-radius:0;max-height:50vh"><table class="t"><thead><tr><th>รหัส</th><th>รายการ</th><th class="n">Min</th><th class="n">Max</th><th class="n">ยกมา</th><th class="n">ใช้</th><th class="n">คงเหลือ</th><th class="n">เติม</th><th>หน่วย</th></tr></thead>
+    <tbody>${refill.sort((a,b) => a.code.localeCompare(b.code)).map(l => `<tr class="${l.rem < 0 && l.G > 0 ? 'neg' : ''}"><td class="cd">${esc(l.code)}</td><td class="nm">${esc(l.g.name)}</td><td class="n">${l.mn === null ? '' : fmt(l.mn)}</td><td class="n">${fmt(l.G)}</td><td class="n">${fmt(l.bf)}</td><td class="n">${fmt(l.L)}</td><td class="n">${fmt(l.rem)}</td><td class="n big">${fmt(l.s)}</td><td>${esc(l.g.unit || '')}</td></tr>`).join('') || '<tr><td colspan="9" class="empty">ไม่มีรายการที่ต้องเติม</td></tr>'}</tbody></table></div></div>`;
     const au = $('#addu'); if (au) au.onclick = async () => {
       au.disabled = true;
       try {
@@ -817,7 +837,7 @@ async function roundView(id){
     </div>
     ${editable ? `<div class="row" style="padding:0 12px 12px;align-items:flex-end"><div class="grow" style="min-width:240px">${drugPicker('ap2','เพิ่มยาที่ไม่อยู่ในรอบ…')}</div><input type="number" id="aq" placeholder="จำนวน (หน่วยเบิก)" min="0" step="1" style="width:150px"><button class="btn" id="aadd">เพิ่ม</button></div>` : ''}
     <div class="tw" style="border:0;border-top:1px solid var(--line);border-radius:0"><table class="t">
-      <thead><tr><th>รหัส</th><th>รายการ</th><th class="n">Fixed</th><th class="n">ยกมา</th><th class="n">ฉุกเฉิน</th><th class="n">คืน</th><th class="n">ใช้</th><th class="n">คงเหลือ</th><th class="n">ระบบแนะนำ</th><th class="n">เบิกจริง</th><th>หน่วยเบิก</th><th>ใบเบิก</th>${r.cf !== undefined && r.status !== 'submitted' ? '<th class="n">ยอดยกไป</th>' : ''}</tr></thead>
+      <thead><tr><th>รหัส</th><th>รายการ</th><th class="n">Min</th><th class="n">Max</th><th class="n">ยกมา</th><th class="n">ฉุกเฉิน</th><th class="n">คืน</th><th class="n">ใช้</th><th class="n">คงเหลือ</th><th class="n">ระบบแนะนำ</th><th class="n">เบิกจริง</th><th>หน่วยเบิก</th><th>ใบเบิก</th>${r.cf !== undefined && r.status !== 'submitted' ? '<th class="n">ยอดยกไป</th>' : ''}</tr></thead>
       <tbody id="lb"></tbody></table></div>
   </div>
   ${d.moves.length ? `<div class="card"><h3>ยอดฉุกเฉิน / ส่งคืนที่รวมในรอบนี้</h3><div class="tw"><table class="t"><thead><tr><th>วันที่</th><th>ประเภท</th><th>รหัส</th><th>รายการ</th><th class="n">จำนวน</th><th>หมายเหตุ</th><th>บันทึกโดย</th></tr></thead><tbody>
@@ -844,13 +864,13 @@ function bindRound(editable){
       const ed = st.edits[l.code];
       const val = ed !== undefined ? (ed === null ? l.suggest : ed) : l.final;
       return `<tr class="${l.short ? 'neg' : ''}"><td class="cd">${esc(l.code)}</td><td class="nm">${esc(l.g.name)}</td>
-      <td class="n">${fmt(l.fixed)}</td><td class="n">${fmt(l.bf)}</td><td class="n">${l.emerg ? fmt(l.emerg) : ''}</td><td class="n">${l.ret ? fmt(l.ret) : ''}</td>
+      <td class="n">${l.min === null || l.min === undefined ? '' : fmt(l.min)}</td><td class="n">${fmt(l.fixed)}</td><td class="n">${fmt(l.bf)}</td><td class="n">${l.emerg ? fmt(l.emerg) : ''}</td><td class="n">${l.ret ? fmt(l.ret) : ''}</td>
       <td class="n">${fmt(l.usage)}</td><td class="n">${fmt(l.rem)}${l.short ? ' <span class="chip short">ขาด</span>' : ''}</td>
       <td class="n">${fmt(l.suggest)}</td>
       <td class="n">${editable ? `<input class="q ${ed !== undefined || (l.adjust !== null && l.adjust !== l.suggest) ? 'chg' : ''}" type="number" min="0" step="1" value="${val}" data-c="${esc(l.code)}">` : `<b>${fmt(l.final)}</b>${l.adjust !== null && l.adjust !== l.suggest ? ' <span class="chip buy" title="เภสัชกรแก้จาก ' + fmt(l.suggest) + '">แก้</span>' : ''}`}</td>
       <td>${esc(l.g.unit || '')} <span class="sub">×${fmt(l.g.pack)}</span></td><td>${srcChips(l.g)}</td>
       ${showCf ? `<td class="n">${fmt(l.cf)}</td>` : ''}</tr>`;
-    }).join('') : `<tr><td colspan="13" class="empty">ไม่มีรายการ</td></tr>`;
+    }).join('') : `<tr><td colspan="14" class="empty">ไม่มีรายการ</td></tr>`;
   };
   $$('#lf button').forEach(b => b.onclick = () => { f = b.dataset.f; $$('#lf button').forEach(x => x.classList.toggle('on', x === b)); draw(); });
   $('#lq').oninput = draw; $('#lsrc').onchange = draw; draw();
@@ -868,7 +888,7 @@ function bindRound(editable){
       if (!pk.code) return toast('เลือกยาจากรายการก่อน', true);
       const q = Math.round(Number($('#aq').value)); if (!(q > 0)) return toast('ใส่จำนวนหน่วยเบิก', true);
       const ex = st.lines.find(l => l.code === pk.code);
-      if (ex){ st.edits[ex.code] = q; } else { st.adds.push({code: pk.code, qty: q}); const g = drug(pk.code); st.lines.push({code: pk.code, g, fixed:0, bf:0, emerg:0, ret:0, usage:0, K:0, rem:0, short:false, suggest:0, adjust:q, final:q, cf:null}); st.lines.sort((a,b) => a.code.localeCompare(b.code)); }
+      if (ex){ st.edits[ex.code] = q; } else { st.adds.push({code: pk.code, qty: q}); const g = drug(pk.code); st.lines.push({code: pk.code, g, fixed:0, min:null, bf:0, emerg:0, ret:0, usage:0, K:0, rem:0, short:false, suggest:0, adjust:q, final:q, cf:null}); st.lines.sort((a,b) => a.code.localeCompare(b.code)); }
       pk.clear(); $('#aq').value = ''; dirty(); draw(); toast('เพิ่มแล้ว อย่าลืมกดบันทึก');
     };
     const save = async () => {
@@ -890,8 +910,8 @@ function bindRound(editable){
 }
 function exportRound(){
   const {r, lines} = S.cache.round;
-  exportXlsx(`รอบเบิก_${r.room}_${r.id}.xlsx`, [['รหัส','รายการ','หน่วยเบิก','หน่วยจ่าย/หน่วยเบิก','Fixed','ยกมา','ฉุกเฉิน','คืน','ใช้','คงเหลือ','ระบบแนะนำ','เบิกจริง','ใบเบิก','ยอดยกไป'],
-    ...lines.map(l => [l.code, l.g.name, l.g.unit, l.g.pack, l.fixed, l.bf, l.emerg, l.ret, l.usage, l.rem, l.suggest, l.final, formShort(formOf(l.g)), l.cf])]);
+  exportXlsx(`รอบเบิก_${r.room}_${r.id}.xlsx`, [['รหัส','รายการ','หน่วยเบิก','หน่วยจ่าย/หน่วยเบิก','Min','Max','ยกมา','ฉุกเฉิน','คืน','ใช้','คงเหลือ','ระบบแนะนำ','เบิกจริง','ใบเบิก','ยอดยกไป'],
+    ...lines.map(l => [l.code, l.g.name, l.g.unit, l.g.pack, l.min, l.fixed, l.bf, l.emerg, l.ret, l.usage, l.rem, l.suggest, l.final, formShort(formOf(l.g)), l.cf])]);
 }
 function printModal(){
   const {r, lines} = S.cache.round;

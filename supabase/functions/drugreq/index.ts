@@ -98,10 +98,16 @@ const log = (q: any, me: Me, action: string, detail: unknown) =>
   q`insert into fs_log(emp_id, action, detail) values (${me.id}, ${action}, ${JSON.stringify(detail)}::text::jsonb)`;
 
 // ---------- สูตรยอดเติม (เหมือนคอลัมน์ U ใน Excel) ----------
-// G = Fixed (หน่วยจ่าย), K = ของที่มี (BF+ฉุกเฉิน-คืน), L = ยอดใช้, D = หน่วยจ่ายต่อหน่วยเบิก
-function suggest(G: number, K: number, L: number, D: number) {
+// G = Fixed/Max (หน่วยจ่าย), K = ของที่มี (BF+ฉุกเฉิน-คืน), L = ยอดใช้, D = หน่วยจ่ายต่อหน่วยเบิก, mn = Min (null = ไม่ได้ตั้ง)
+// มี Min: เติมเมื่อคงเหลือ <= Min ให้กลับไปใกล้ Max (อย่างน้อย 1 หน่วยเบิก) / ไม่มี Min: สูตร Fixed เดิม
+function suggest(G: number, K: number, L: number, D: number, mn: number | null = null) {
   if (!(G > 0)) return 0;
   const rem = K - L;
+  if (mn !== null && mn !== undefined) {
+    if (rem > mn) return 0;
+    if (D > G) return 1;
+    return G - rem <= 0 ? 0 : Math.max(1, Math.round((G - rem) / D));
+  }
   if (D > G) return rem > G / 2 ? 0 : 1;
   if (G - rem <= 0) return 0;
   return Math.round((G - rem) / D);
@@ -125,7 +131,7 @@ async function boot(me: Me, req: any) {
 
 async function roomData(_me: Me, req: any) {
   const room = String(req.room || '');
-  const fixed = await sql`select code, qty::float8 qty from fs_fixed where room=${room} and qty > 0`;
+  const fixed = await sql`select code, qty::float8 qty, min_qty::float8 min from fs_fixed where room=${room} and qty > 0`;
   const balance = await sql`select code, qty::float8 qty from fs_balance where room=${room}`;
   const moves = await sql`select id, code, kind, qty::float8 qty, note, created_by, created_at from fs_moves where room=${room} and round_id is null order by created_at desc`;
   const rounds = await sql`
@@ -140,7 +146,7 @@ async function getRound(_me: Me, req: any) {
   const id = num(req.id);
   const r = await sql`select * from fs_rounds where id=${id}`;
   if (!r.length) fail('not_found');
-  const lines = await sql`select code, fixed::float8 fixed, bf::float8 bf, emerg::float8 emerg, ret::float8 ret, usage::float8 usage,
+  const lines = await sql`select code, fixed::float8 fixed, min::float8 min, bf::float8 bf, emerg::float8 emerg, ret::float8 ret, usage::float8 usage,
                           suggest::float8 suggest, adjust::float8 adjust, cf::float8 cf from fs_round_lines where round_id=${id}`;
   const moves = await sql`select id, code, kind, qty::float8 qty, note, created_by, created_at from fs_moves where round_id=${id} order by created_at`;
   return { ok: true, round: r[0], lines, moves };
@@ -177,8 +183,8 @@ async function createRound(me: Me, req: any) {
 
     const drugs = new Map<string, number>();
     for (const d of await q`select code, pack::float8 pack from fs_drugs`) drugs.set(d.code, d.pack > 0 ? d.pack : 1);
-    const fixed = new Map<string, number>(), bal = new Map<string, number>();
-    for (const r of await q`select code, qty::float8 qty from fs_fixed where room=${room}`) fixed.set(r.code, r.qty);
+    const fixed = new Map<string, number>(), mins = new Map<string, number | null>(), bal = new Map<string, number>();
+    for (const r of await q`select code, qty::float8 qty, min_qty::float8 mn from fs_fixed where room=${room}`) { fixed.set(r.code, r.qty); mins.set(r.code, r.mn); }
     for (const r of await q`select code, qty::float8 qty from fs_balance where room=${room}`) bal.set(r.code, r.qty);
     const moves = await q`select id, code, kind, qty::float8 qty from fs_moves where room=${room} and round_id is null`;
     const em = new Map<string, number>(), rt = new Map<string, number>();
@@ -207,11 +213,12 @@ async function createRound(me: Me, req: any) {
       const G = fixed.get(c) || 0;
       const bf = bal.has(c) ? bal.get(c)! : G; // ยังไม่มียอดยกมา = ถือว่าเริ่มเต็ม Fixed
       const e = em.get(c) || 0, t = rt.get(c) || 0, L = usage.get(c) || 0;
-      lines.push({ round_id: id, code: c, fixed: G, bf, emerg: e, ret: t, usage: L, suggest: suggest(G, bf + e - t, L, drugs.get(c)!) });
+      const mn = G > 0 ? (mins.get(c) ?? null) : null;
+      lines.push({ round_id: id, code: c, fixed: G, min: mn, bf, emerg: e, ret: t, usage: L, suggest: suggest(G, bf + e - t, L, drugs.get(c)!, mn) });
     }
     for (let i = 0; i < lines.length; i += 1000) {
       const chunk = lines.slice(i, i + 1000);
-      await q`insert into fs_round_lines ${q(chunk, 'round_id', 'code', 'fixed', 'bf', 'emerg', 'ret', 'usage', 'suggest')}`;
+      await q`insert into fs_round_lines ${q(chunk, 'round_id', 'code', 'fixed', 'min', 'bf', 'emerg', 'ret', 'usage', 'suggest')}`;
     }
     if (moves.length) await q`update fs_moves set round_id=${id} where id in ${q(moves.map((m: any) => m.id))}`;
     await log(q, me, 'createRound', { id, room, lines: lines.length, unknown: unknown.length });
@@ -242,8 +249,9 @@ async function saveAdjust(me: Me, req: any) {
       const c = code(a.code), v = Math.max(0, num(a.qty));
       const d = await q`select 1 from fs_drugs where code=${c}`;
       if (!d.length) fail('unknown_drug:' + c);
-      await q`insert into fs_round_lines(round_id, code, fixed, bf, suggest, adjust)
+      await q`insert into fs_round_lines(round_id, code, fixed, min, bf, suggest, adjust)
               values (${id}, ${c}, coalesce((select qty from fs_fixed where room=${r.room} and code=${c}),0),
+                      (select min_qty from fs_fixed where room=${r.room} and code=${c}),
                       coalesce((select qty from fs_balance where room=${r.room} and code=${c}),0), 0, ${v})
               on conflict (round_id, code) do update set adjust=excluded.adjust`;
       n++;
@@ -353,21 +361,29 @@ async function setDrug(me: Me, req: any) {
 async function importRoomQty(me: Me, req: any, table: 'fs_fixed' | 'fs_balance') {
   need(me, 'admin');
   const room = String(req.room || '');
-  const agg = new Map<string, number>();
+  const agg = new Map<string, number>(), mins = new Map<string, number | null>();
   for (const r of req.rows || []) {
     const c = code(r.code);
-    if (c) agg.set(c, (req.sum ? agg.get(c) || 0 : 0) + num(r.qty));
+    if (!c) continue;
+    agg.set(c, (req.sum ? agg.get(c) || 0 : 0) + num(r.qty));
+    if (r.min !== undefined && r.min !== null && r.min !== '') mins.set(c, num(r.min));
   }
   return await sql.begin(async (q: any) => {
     const rm = await q`select 1 from fs_rooms where code=${room}`;
     if (!rm.length) fail('bad_room');
     const known = new Set((await q`select code from fs_drugs`).map((d: any) => d.code));
     const rows = [], unknown: string[] = [];
-    for (const [c, v] of agg) { if (known.has(c)) rows.push({ room, code: c, qty: v }); else unknown.push(c); }
+    const withMin = table === 'fs_fixed' && !!req.hasMin;
+    for (const [c, v] of agg) { if (known.has(c)) rows.push({ room, code: c, qty: v, min_qty: mins.has(c) ? mins.get(c) : null }); else unknown.push(c); }
     if (req.replace) await q`delete from ${q(table)} where room=${room}`;
     for (let i = 0; i < rows.length; i += 1000) {
-      await q`insert into ${q(table)} ${q(rows.slice(i, i + 1000), 'room', 'code', 'qty')}
-              on conflict (room, code) do update set qty=excluded.qty, updated_at=now()`;
+      if (withMin) {
+        await q`insert into fs_fixed ${q(rows.slice(i, i + 1000), 'room', 'code', 'qty', 'min_qty')}
+                on conflict (room, code) do update set qty=excluded.qty, min_qty=excluded.min_qty, updated_at=now()`;
+      } else {
+        await q`insert into ${q(table)} ${q(rows.slice(i, i + 1000), 'room', 'code', 'qty')}
+                on conflict (room, code) do update set qty=excluded.qty, updated_at=now()`;
+      }
     }
     await log(q, me, 'import_' + table, { room, n: rows.length, replace: !!req.replace });
     return { ok: true, n: rows.length, unknown };
@@ -376,6 +392,12 @@ async function importRoomQty(me: Me, req: any, table: 'fs_fixed' | 'fs_balance')
 async function setRoomQty(me: Me, req: any, table: 'fs_fixed' | 'fs_balance') {
   need(me, 'admin');
   const room = String(req.room || ''), c = code(req.code), v = num(req.qty);
+  if (table === 'fs_fixed' && 'min' in req) {
+    const mn = req.min === null || req.min === '' ? null : num(req.min);
+    await sql`insert into fs_fixed (room, code, qty, min_qty) values (${room}, ${c}, ${v}, ${mn})
+              on conflict (room, code) do update set qty=excluded.qty, min_qty=excluded.min_qty, updated_at=now()`;
+    return { ok: true };
+  }
   await sql`insert into ${sql(table)} (room, code, qty) values (${room}, ${c}, ${v})
             on conflict (room, code) do update set qty=excluded.qty, updated_at=now()`;
   return { ok: true };
