@@ -97,20 +97,15 @@ async function changePw(me: Me, req: any) {
 const log = (q: any, me: Me, action: string, detail: unknown) =>
   q`insert into fs_log(emp_id, action, detail) values (${me.id}, ${action}, ${JSON.stringify(detail)}::text::jsonb)`;
 
-// ---------- สูตรยอดเติม (เหมือนคอลัมน์ U ใน Excel) ----------
-// G = Fixed/Max (หน่วยจ่าย), K = ของที่มี (BF+ฉุกเฉิน-คืน), L = ยอดใช้, D = หน่วยจ่ายต่อหน่วยเบิก, mn = Min (null = ไม่ได้ตั้ง)
-// มี Min: เติมเมื่อคงเหลือ <= Min ให้กลับไปใกล้ Max (อย่างน้อย 1 หน่วยเบิก) / ไม่มี Min: สูตร Fixed เดิม
-function suggest(G: number, K: number, L: number, D: number, mn: number | null = null) {
+// ---------- สูตรยอดเติม ----------
+// G = Max (หน่วยจ่าย), K = ของที่มี (ยกมา+ฉุกเฉิน-คืน), L = ยอดจ่าย, D = หน่วยจ่ายต่อ 1 หน่วยเบิก, mn = Min (null = ไม่ได้ตั้ง)
+// เบิกทุกรอบที่มีของออก (คงเหลือต่ำกว่า Max) เป็นจำนวนเต็มหน่วยเบิกที่เติมแล้วไม่เกิน Max (ปัดลง)
+// ถ้าเติมแม้ 1 หน่วยเบิกแล้วจะเกิน Max = ยังไม่เบิก รอรอบถัดไป (Min ใช้เป็นจุดเตือนเท่านั้น)
+function suggest(G: number, K: number, L: number, D: number, _mn: number | null = null) {
   if (!(G > 0)) return 0;
   const rem = K - L;
-  if (mn !== null && mn !== undefined) {
-    if (rem > mn) return 0;
-    if (D > G) return 1;
-    return G - rem <= 0 ? 0 : Math.max(1, Math.round((G - rem) / D));
-  }
-  if (D > G) return rem > G / 2 ? 0 : 1;
-  if (G - rem <= 0) return 0;
-  return Math.round((G - rem) / D);
+  if (rem >= G) return 0;
+  return Math.floor((G - rem) / D + 1e-9);
 }
 const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 const code = (v: unknown) => String(v ?? '').trim().toUpperCase();
