@@ -1,0 +1,1030 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ระบบเบิกยาห้องยา</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Sarabun:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#f4f6f5; --card:#fff; --ink:#17201d; --muted:#5d6b66; --line:#dfe5e2; --soft:#eef3f1;
+  --pri:#0e6b5c; --pri-ink:#fff; --pri-soft:#e1f1ed;
+  --warn:#b45309; --warn-soft:#fdf1e2; --bad:#b42318; --bad-soft:#fdecea; --ok:#15803d; --ok-soft:#e5f5ea;
+  --info:#1d4ed8; --info-soft:#e7eefc; --tam:#7c3aed; --tam-soft:#f1eafd;
+  --r:10px;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:'IBM Plex Sans Thai',system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.5}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--pri)}
+.hidden{display:none!important}
+/* layout */
+header.top{background:var(--pri);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;position:sticky;top:0;z-index:20}
+header.top .brand{font-weight:700;font-size:17px;line-height:1.2}
+header.top .brand small{display:block;font-weight:400;font-size:12px;opacity:.85}
+header.top .sp{flex:1}
+header.top .who{font-size:13px;text-align:right;line-height:1.25}
+header.top .who b{font-weight:600}
+.btn-h{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:8px;padding:5px 10px;cursor:pointer;font-size:13px}
+.btn-h:hover{background:rgba(255,255,255,.24)}
+nav.rooms{background:#fff;border-bottom:1px solid var(--line);display:flex;gap:4px;padding:0 12px;overflow-x:auto;position:sticky;top:56px;z-index:15}
+nav.rooms a{padding:11px 14px;text-decoration:none;color:var(--muted);font-weight:500;border-bottom:3px solid transparent;white-space:nowrap}
+nav.rooms a.on{color:var(--pri);border-bottom-color:var(--pri)}
+nav.rooms .sp{flex:1}
+main{max-width:1280px;margin:0 auto;padding:16px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.tabs a{padding:7px 14px;border-radius:999px;text-decoration:none;color:var(--ink);background:#fff;border:1px solid var(--line);font-size:14px}
+.tabs a.on{background:var(--pri);color:#fff;border-color:var(--pri)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:14px}
+.card h2{margin:0 0 4px;font-size:18px}
+.card h3{margin:0 0 8px;font-size:16px}
+.sub{color:var(--muted);font-size:13px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.row.end{justify-content:flex-end}
+.grow{flex:1}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+label.f input,label.f select,label.f textarea{color:var(--ink)}
+input[type=text],input[type=password],input[type=number],input[type=date],input[type=search],select,textarea{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:#fff;min-width:0}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--pri-soft);border-color:var(--pri)}
+.btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:500;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{background:var(--soft)}
+.btn.pri{background:var(--pri);border-color:var(--pri);color:#fff}
+.btn.pri:hover{filter:brightness(1.08)}
+.btn.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+.btn.bad{color:var(--bad);border-color:#f3c3be}
+.btn.sm{padding:4px 10px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.chip{display:inline-block;padding:1px 9px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+.st-submitted{background:var(--warn-soft);color:var(--warn)}
+.st-approved{background:var(--info-soft);color:var(--info)}
+.st-received{background:var(--ok-soft);color:var(--ok)}
+.st-cancelled{background:#eee;color:#777}
+.chip.tam{background:var(--tam-soft);color:var(--tam)}
+.chip.buy{background:var(--warn-soft);color:var(--warn)}
+.chip.main{background:var(--soft);color:var(--muted)}
+.chip.short{background:var(--bad-soft);color:var(--bad)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
+.stat{background:var(--soft);border-radius:8px;padding:10px 12px}
+.stat b{display:block;font-size:22px;line-height:1.2}
+.stat span{font-size:12px;color:var(--muted)}
+/* tables */
+.tw{overflow:auto;border:1px solid var(--line);border-radius:8px;max-height:70vh;background:#fff}
+table.t{border-collapse:collapse;width:100%;font-size:14px}
+table.t th,table.t td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+table.t th{background:#f7f9f8;position:sticky;top:0;z-index:1;font-weight:600;font-size:13px;color:var(--muted);white-space:nowrap}
+table.t td.n,table.t th.n{text-align:right;font-variant-numeric:tabular-nums}
+table.t tr:hover td{background:#fafcfb}
+table.t tr.neg td{background:#fff7f6}
+table.t td .nm{font-size:13px}
+table.t td .cd{font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:600}
+table.t input.q{width:78px;text-align:right;padding:4px 6px}
+table.t input.q.chg{background:#fff8e6;border-color:var(--warn)}
+td.big{font-weight:700;font-size:15px}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+.clickrow{cursor:pointer}
+/* login */
+.login{max-width:380px;margin:9vh auto;padding:0 16px}
+.login .card{padding:26px}
+.login h1{font-size:22px;margin:0 0 2px}
+.login .lg{width:52px;height:52px;border-radius:14px;background:var(--pri);color:#fff;display:grid;place-items:center;font-weight:700;font-size:22px;margin-bottom:12px}
+.login form{display:flex;flex-direction:column;gap:12px;margin-top:16px}
+.err{color:var(--bad);font-size:14px;min-height:1.2em}
+footer{text-align:center;color:var(--muted);font-size:12px;padding:20px 16px 30px}
+/* modal */
+.mbg{position:fixed;inset:0;background:rgba(15,25,22,.45);z-index:50;display:flex;align-items:flex-start;justify-content:center;padding:4vh 12px;overflow:auto}
+.modal{background:#fff;border-radius:12px;max-width:760px;width:100%;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.modal h2{margin:0 0 12px;font-size:19px}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#17201d;color:#fff;padding:10px 18px;border-radius:10px;z-index:80;font-size:14px;max-width:90vw;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+.toast.bad{background:var(--bad)}
+.note{background:var(--soft);border-radius:8px;padding:10px 12px;font-size:13px;color:var(--muted)}
+.note.warn{background:var(--warn-soft);color:#7a3d06}
+.note.bad{background:var(--bad-soft);color:var(--bad)}
+.ac{position:relative}
+.ac .list{position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);max-height:280px;overflow:auto;z-index:30}
+.ac .it{padding:7px 10px;cursor:pointer;font-size:14px;border-bottom:1px solid var(--soft)}
+.ac .it:hover,.ac .it.on{background:var(--pri-soft)}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-3px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.loading{padding:40px;text-align:center;color:var(--muted)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:#fff;padding:6px 12px;cursor:pointer;font-size:13px;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--pri);color:#fff}
+.steps{display:flex;gap:6px;flex-wrap:wrap;font-size:13px;margin:6px 0 2px}
+.steps span{padding:3px 10px;border-radius:999px;background:var(--soft);color:var(--muted)}
+.steps span.on{background:var(--pri-soft);color:var(--pri);font-weight:600}
+.steps span.done{background:var(--ok-soft);color:var(--ok)}
+/* print */
+#print{display:none}
+@media print{
+  @page{size:A4 portrait;margin:12mm 10mm}
+  body{background:#fff}
+  body>*:not(#print){display:none!important}
+  #print{display:block;font-family:'Sarabun','IBM Plex Sans Thai',sans-serif;font-size:13px;color:#000}
+  .pf{page-break-after:always}
+  .pf:last-child{page-break-after:auto}
+  .pf h1{text-align:center;font-size:18px;margin:0 0 8px}
+  .pf .hd{display:grid;grid-template-columns:1fr 1fr;gap:2px 16px;margin-bottom:8px;font-size:13px}
+  .pf table{width:100%;border-collapse:collapse}
+  .pf th,.pf td{border:1px solid #000;padding:3px 5px;font-size:12.5px}
+  .pf th{background:#eee}
+  .pf td.n{text-align:right}
+  .pf td.c{text-align:center}
+  .pf thead{display:table-header-group}
+  .pf tr{page-break-inside:avoid}
+  .pf .sig{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:26px;text-align:center;font-size:12.5px;page-break-inside:avoid}
+  .pf .sig div{padding-top:28px;border-top:1px dotted #000}
+  .pf .ft{margin-top:8px;font-size:11px;color:#444;display:flex;justify-content:space-between}
+}
+@media (max-width:700px){
+  header.top{position:static}
+  header.top .who{text-align:left;order:3;width:100%}
+  nav.rooms{top:0}
+  main{padding:12px}
+  .card{padding:13px}
+  table.t{font-size:13px}
+  .hide-m{display:none}
+}
+</style>
+</head>
+<body>
+<div id="app"><div class="loading">กำลังโหลด…</div></div>
+<div id="print"></div>
+<script>
+'use strict';
+const API = 'https://ujqjgqkjocdtlgvrydae.supabase.co/functions/v1/drugreq';
+const HOSPITAL = 'โรงพยาบาลจุฬารัตน์ 9 แอร์พอร์ต';
+const ROLE_TH = {user:'เจ้าหน้าที่', pharm:'เภสัชกร', admin:'ผู้ดูแลระบบ'};
+const ST_TH = {submitted:'รอเภสัชกรตรวจ', approved:'อนุมัติแล้ว รอรับยา', received:'รับยาแล้ว', cancelled:'ยกเลิก'};
+const RANK = {user:1, pharm:2, admin:3};
+const FORMS = [
+  {key:'main', sup:'main', buy:false, title:'ใบเบิกยา / เวชภัณฑ์', from:'เภสัชกรรม (คลังยา/เวชภัณฑ์)', short:'คลังยา'},
+  {key:'mainbuy', sup:'main', buy:true, title:'ใบเบิกยา / เวชภัณฑ์ (ขอซื้อ)', from:'เภสัชกรรม (คลังยา/เวชภัณฑ์)', short:'คลังยา-ขอซื้อ'},
+  {key:'tam', sup:'tam', buy:false, title:'ใบเบิกยา / เวชภัณฑ์', from:'เภสัชกรรม (คลังยา/เวชภัณฑ์-ไทยแอมดอน)', short:'TAM'},
+  {key:'tambuy', sup:'tam', buy:true, title:'ใบเบิกยา / เวชภัณฑ์ (ขอซื้อ)', from:'เภสัชกรรม (คลังยา/เวชภัณฑ์-ไทยแอมดอน)', short:'TAM-ขอซื้อ'},
+];
+
+// ---------- utils ----------
+const $ = (s, el=document) => el.querySelector(s);
+const $$ = (s, el=document) => [...el.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = v => { if (v === null || v === undefined || v === '') return ''; const n = Number(v); return Number.isFinite(n) ? n.toLocaleString('th-TH', {maximumFractionDigits:2}) : esc(v); };
+const thDate = d => { if (!d) return '-'; const x = new Date(String(d).length <= 10 ? d + 'T00:00:00' : d); return isNaN(x) ? '-' : x.toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'}); };
+const thDateTime = d => { if (!d) return '-'; const x = new Date(d); return isNaN(x) ? '-' : x.toLocaleString('th-TH', {day:'numeric', month:'short', year:'2-digit', hour:'2-digit', minute:'2-digit'}); };
+const isoDate = d => { const z = new Date(d.getTime() - d.getTimezoneOffset()*60000); return z.toISOString().slice(0,10); };
+const ls = { get(k){ try { return localStorage.getItem(k); } catch { return null; } }, set(k,v){ try { localStorage.setItem(k,v); } catch {} }, del(k){ try { localStorage.removeItem(k); } catch {} } };
+async function sha256(s){ const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2,'0')).join(''); }
+const pwHash = (id, pw) => sha256('ch9sup|' + id + '|' + pw);
+function toast(msg, bad){ const t = document.createElement('div'); t.className = 'toast' + (bad ? ' bad' : ''); t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), bad ? 5000 : 2600); }
+const ERR = {
+  auth:'หมดเวลาการเข้าระบบ กรุณาเข้าใหม่', forbidden:'ไม่มีสิทธิ์ทำรายการนี้', bad_status:'สถานะรอบเบิกเปลี่ยนไปแล้ว ลองรีเฟรชหน้า',
+  bad_pw:'รหัสผ่านไม่ถูกต้อง', no_user:'ไม่พบรหัสพนักงานนี้', locked:'ใส่รหัสผิดหลายครั้ง ถูกล็อก 10 นาที', last_admin:'ต้องมีผู้ดูแลระบบอย่างน้อย 1 คน',
+  bad_qty:'จำนวนไม่ถูกต้อง', in_round:'รายการนี้ถูกรวมในรอบเบิกแล้ว ลบไม่ได้', network:'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจสอบอินเทอร์เน็ต',
+};
+function errText(c){ c = String(c || ''); if (c.startsWith('open_round:')) return `ห้องนี้มีรอบเบิกที่รอเภสัชกรตรวจอยู่ (รอบ #${c.split(':')[1]}) ต้องอนุมัติหรือยกเลิกก่อนสร้างรอบใหม่`; if (c.startsWith('unknown_drug:')) return 'ไม่พบรหัสยา ' + c.split(':')[1]; return ERR[c] || ('เกิดข้อผิดพลาด: ' + c); }
+
+// ---------- state & api ----------
+const S = { token: ls.get('fs_token'), user: null, rooms: [], drugs: new Map(), names: {}, cache: {} };
+async function api(a, data = {}){
+  let r;
+  try { r = await fetch(API, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({a, token:S.token, ...data})}); }
+  catch { throw new Error('network'); }
+  const j = await r.json().catch(() => ({ok:false, code:'bad_response'}));
+  if (!j.ok){ if (j.code === 'auth' && a !== 'login'){ logout(true); } throw new Error(j.code || 'error'); }
+  return j;
+}
+const can = r => S.user && RANK[S.user.role] >= RANK[r];
+const drug = c => S.drugs.get(c) || {code:c, name:'(ไม่พบในรายการยา)', pack:1, unit:'', supplier:'main', buy:false};
+const who = id => id ? (S.names[id] || id) : '-';
+const roomName = c => (S.rooms.find(r => r.code === c) || {}).name || c;
+
+async function boot(){
+  let cached = null;
+  try { cached = JSON.parse(ls.get('fs_drugs') || 'null'); } catch {}
+  const since = cached && cached.max ? cached.max : 0;
+  const b = await api('boot', since ? {since} : {});
+  S.user = b.user; S.rooms = b.rooms.filter(r => r.active); S.allRooms = b.rooms; S.names = b.names || {};
+  const map = new Map();
+  if (!b.full && cached) for (const d of cached.list) map.set(d.code, d);
+  let max = since;
+  for (const d of b.drugs){ d.pack = Number(d.pack) || 1; d.u = Number(d.u); map.set(d.code, d); if (d.u > max) max = d.u; }
+  if (map.size !== b.drugCount && since){ ls.del('fs_drugs'); return boot(); }
+  S.drugs = map;
+  ls.set('fs_drugs', JSON.stringify({max, list:[...map.values()]}));
+}
+function logout(expired){ S.token = null; S.user = null; ls.del('fs_token'); if (expired) toast(ERR.auth, true); location.hash = ''; render(); }
+
+// ---------- formula (เหมือนคอลัมน์ U ใน Excel) ----------
+function suggest(G, K, L, D){ if (!(G > 0)) return 0; const rem = K - L; if (D > G) return rem > G/2 ? 0 : 1; if (G - rem <= 0) return 0; return Math.round((G - rem) / D); }
+
+// ---------- routing ----------
+window.addEventListener('hashchange', render);
+function route(){
+  const p = location.hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
+  return p;
+}
+function go(h){ if (location.hash === h) render(); else location.hash = h; }
+
+async function render(){
+  const app = $('#app');
+  if (!S.token){ app.innerHTML = loginView(); bindLogin(); return; }
+  if (!S.user){
+    app.innerHTML = '<div class="loading">กำลังโหลดข้อมูล…</div>';
+    try { await boot(); } catch (e){ if (S.token) app.innerHTML = `<div class="login"><div class="card"><p class="err">${esc(errText(e.message))}</p><button class="btn" onclick="location.reload()">ลองใหม่</button> <button class="btn" onclick="logout()">ออกจากระบบ</button></div></div>`; return; }
+    if (S.user.mustChange){ app.innerHTML = shell(''); changePwModal(true); return; }
+  }
+  const p = route();
+  if (!p[0]){ const last = ls.get('fs_room'); const r = S.rooms.find(x => x.code === last) || S.rooms[0]; go(r ? `#/room/${r.code}/rounds` : '#/admin/drugs'); return; }
+  let body = '', after = null;
+  try {
+    if (p[0] === 'room'){ ls.set('fs_room', p[1]); [body, after] = await roomView(p[1], p[2] || 'rounds'); }
+    else if (p[0] === 'round'){ [body, after] = await roundView(Number(p[1])); }
+    else if (p[0] === 'new'){ [body, after] = await newRoundView(p[1]); }
+    else if (p[0] === 'admin'){ [body, after] = await adminView(p[1] || 'drugs'); }
+    else body = '<div class="empty">ไม่พบหน้า</div>';
+  } catch (e){ body = `<div class="card"><p class="err">${esc(errText(e.message))}</p></div>`; }
+  app.innerHTML = shell(body, p);
+  if (after) after();
+}
+
+function shell(body, p = []){
+  const cur = p[0] === 'room' || p[0] === 'new' ? p[1] : (p[0] === 'round' ? S.curRoundRoom : null);
+  return `
+  <header class="top">
+    <div class="brand">ระบบเบิกยาห้องยา<small>แผนกเภสัชกรรม ${HOSPITAL}</small></div>
+    <div class="sp"></div>
+    <div class="who"><b>${esc(S.user ? (S.user.first + ' ' + S.user.last) : '')}</b><br>${S.user ? ROLE_TH[S.user.role] : ''}</div>
+    <button class="btn-h" onclick="changePwModal()">เปลี่ยนรหัสผ่าน</button>
+    <button class="btn-h" onclick="logout()">ออก</button>
+  </header>
+  <nav class="rooms">
+    ${S.rooms.map(r => `<a href="#/room/${encodeURIComponent(r.code)}/rounds" class="${cur === r.code ? 'on' : ''}">${esc(r.name)}</a>`).join('')}
+    <span class="sp"></span>
+    ${can('admin') ? `<a href="#/admin/drugs" class="${p[0] === 'admin' ? 'on' : ''}">⚙︎ ตั้งค่าระบบ</a>` : ''}
+  </nav>
+  <main>${body}</main>
+  <footer>Design &amp; Developed by ภก.วทัญญู โตเจริญนิรัติศัย</footer>`;
+}
+
+// ---------- login ----------
+function loginView(){
+  return `<div class="login"><div class="card">
+    <div class="lg">Rx</div>
+    <h1>ระบบเบิกยาห้องยา</h1>
+    <div class="sub">แผนกเภสัชกรรม ${HOSPITAL}</div>
+    <form id="lf">
+      <label class="f">รหัสพนักงาน<input type="text" id="lid" inputmode="numeric" autocomplete="username" required></label>
+      <label class="f">รหัสผ่าน<input type="password" id="lpw" autocomplete="current-password" required></label>
+      <div class="err" id="lerr"></div>
+      <button class="btn pri" style="justify-content:center">เข้าสู่ระบบ</button>
+      <div class="sub">ใช้รหัสเดียวกับระบบเบิกพัสดุห้องยา</div>
+    </form>
+  </div></div><footer>Design &amp; Developed by ภก.วทัญญู โตเจริญนิรัติศัย</footer>`;
+}
+function bindLogin(){
+  $('#lf').onsubmit = async e => {
+    e.preventDefault();
+    const id = $('#lid').value.replace(/\D/g, ''), pw = $('#lpw').value, btn = $('#lf button');
+    btn.disabled = true; btn.innerHTML = '<span class="spin"></span> กำลังเข้าสู่ระบบ';
+    try {
+      const r = await api('login', {id, h: await pwHash(id, pw)});
+      S.token = r.token; ls.set('fs_token', r.token); S.user = null; render();
+    } catch (er){ $('#lerr').textContent = errText(er.message); btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ'; }
+  };
+}
+function modal(html, onClose){
+  const bg = document.createElement('div'); bg.className = 'mbg';
+  bg.innerHTML = `<div class="modal">${html}</div>`;
+  bg.close = () => { bg.remove(); if (onClose) onClose(); };
+  bg.addEventListener('mousedown', e => { if (e.target === bg && !bg.dataset.lock) bg.close(); });
+  document.body.appendChild(bg); return bg;
+}
+function changePwModal(force){
+  const m = modal(`<h2>${force ? 'ตั้งรหัสผ่านใหม่ก่อนใช้งาน' : 'เปลี่ยนรหัสผ่าน'}</h2>
+    ${force ? '<p class="note warn">บัญชีนี้ยังใช้รหัสผ่านเริ่มต้น กรุณาตั้งรหัสใหม่ (ใช้ร่วมกับระบบเบิกพัสดุห้องยา)</p>' : '<p class="note">รหัสผ่านนี้ใช้ร่วมกับระบบเบิกพัสดุห้องยา</p>'}
+    <form id="pf" style="display:flex;flex-direction:column;gap:12px;margin-top:12px">
+      <label class="f">รหัสผ่านใหม่ (อย่างน้อย 6 ตัว)<input type="password" id="p1" minlength="6" required autocomplete="new-password"></label>
+      <label class="f">ยืนยันรหัสผ่านใหม่<input type="password" id="p2" minlength="6" required autocomplete="new-password"></label>
+      <div class="err" id="perr"></div>
+      <div class="row end">${force ? '<button type="button" class="btn" onclick="logout()">ออกจากระบบ</button>' : '<button type="button" class="btn" id="pc">ยกเลิก</button>'}<button class="btn pri">บันทึก</button></div>
+    </form>`);
+  if (force) m.dataset.lock = 1; else $('#pc', m).onclick = () => m.close();
+  $('#pf', m).onsubmit = async e => {
+    e.preventDefault();
+    const a = $('#p1', m).value, b = $('#p2', m).value;
+    if (a !== b){ $('#perr', m).textContent = 'รหัสผ่านไม่ตรงกัน'; return; }
+    if (a === '12345678'){ $('#perr', m).textContent = 'ห้ามใช้รหัสเริ่มต้น'; return; }
+    try { const r = await api('changePw', {h: await pwHash(S.user.id, a)}); S.token = r.token; ls.set('fs_token', r.token); S.user = r.user; m.close(); toast('เปลี่ยนรหัสผ่านแล้ว'); if (force) render(); }
+    catch (er){ $('#perr', m).textContent = errText(er.message); }
+  };
+}
+
+// ---------- room ----------
+async function roomView(room, tab){
+  if (!S.rooms.find(r => r.code === room)) return ['<div class="empty">ไม่พบห้องยา</div>'];
+  const d = await api('roomData', {room, limit:60});
+  S.cache.room = {room, ...d};
+  const tabs = [['rounds','รอบเบิก'],['moves',`เบิกฉุกเฉิน / ส่งคืน${d.moves.length ? ` (${d.moves.length})` : ''}`],['fixed','Fixed stock'],['report','รายงานยอดใช้']];
+  const head = `<div class="row" style="margin-bottom:10px"><h2 style="margin:0;font-size:21px" class="grow">${esc(roomName(room))}</h2></div>
+    <div class="tabs">${tabs.map(([k,t]) => `<a href="#/room/${encodeURIComponent(room)}/${k}" class="${tab === k ? 'on' : ''}">${t}</a>`).join('')}</div>`;
+  if (tab === 'moves') return [head + movesTab(room, d), () => bindMoves(room)];
+  if (tab === 'fixed') return [head + fixedTab(room, d), () => bindFixed(room, d)];
+  if (tab === 'report') return [head + '<div id="rep"><div class="loading">กำลังคำนวณ…</div></div>', () => loadReport(room, 8)];
+  return [head + roundsTab(room, d)];
+}
+
+function roundsTab(room, d){
+  const open = d.rounds.find(r => r.status === 'submitted');
+  const waitRecv = d.rounds.filter(r => r.status === 'approved');
+  const noFixed = !d.fixed.length;
+  return `
+  ${noFixed ? `<div class="note warn" style="margin-bottom:12px">ห้องนี้ยังไม่ได้ตั้ง Fixed stock ${can('admin') ? `— ไปที่แท็บ <a href="#/room/${encodeURIComponent(room)}/fixed">Fixed stock</a> เพื่อนำเข้าจาก Excel` : '— แจ้งผู้ดูแลระบบให้ตั้งค่า'}</div>` : ''}
+  <div class="card">
+    <div class="row">
+      <div class="grow"><h3 style="margin:0">รอบเบิกประจำสัปดาห์</h3>
+        <div class="sub">Fixed stock ${d.fixed.length.toLocaleString()} รายการ · ยอดฉุกเฉิน/คืนที่ยังไม่รวมรอบ ${d.moves.length} รายการ</div></div>
+      ${open ? `<a class="btn pri" href="#/round/${open.id}">เปิดรอบ #${open.id} ที่รอตรวจ</a>` : `<a class="btn pri" href="#/new/${encodeURIComponent(room)}">＋ สร้างรอบเบิกใหม่</a>`}
+    </div>
+    ${waitRecv.length ? `<div class="note" style="margin-top:12px">มี ${waitRecv.length} รอบที่อนุมัติแล้ว รอห้องยากดยืนยันรับยา</div>` : ''}
+  </div>
+  <div class="card" style="padding:0">
+    ${d.rounds.length ? `<div class="tw" style="border:0;max-height:none"><table class="t">
+      <thead><tr><th>รอบ</th><th>ช่วงยอดจ่าย</th><th>วันที่เบิก</th><th class="n">รายการที่เติม</th><th>สถานะ</th><th class="hide-m">สร้างโดย</th><th class="hide-m">อนุมัติโดย</th></tr></thead>
+      <tbody>${d.rounds.map(r => `<tr class="clickrow" onclick="go('#/round/${r.id}')">
+        <td><b>#${r.id}</b></td><td>${thDate(r.period_start)} – ${thDate(r.period_end)}</td><td>${thDate(r.req_date)}</td>
+        <td class="n">${r.n_items}</td><td><span class="chip st-${r.status}">${ST_TH[r.status]}</span></td>
+        <td class="hide-m">${esc(who(r.created_by))}</td><td class="hide-m">${esc(who(r.approved_by))}</td></tr>`).join('')}</tbody></table></div>`
+      : '<div class="empty">ยังไม่มีรอบเบิก</div>'}
+  </div>`;
+}
+
+// ---------- moves ----------
+function drugPicker(id, ph = 'พิมพ์รหัสหรือชื่อยา'){
+  return `<div class="ac" id="${id}"><input type="search" placeholder="${ph}" autocomplete="off" style="width:100%"><div class="list hidden"></div></div>`;
+}
+function bindPicker(id, onPick){
+  const box = $('#' + id), inp = $('input', box), list = $('.list', box);
+  let items = [], idx = -1;
+  const show = () => {
+    const q = inp.value.trim().toUpperCase();
+    if (!q){ list.classList.add('hidden'); return; }
+    items = [];
+    for (const d of S.drugs.values()){
+      if (!d.active) continue;
+      const c = d.code, n = d.name.toUpperCase();
+      const s = c === q ? 0 : c.startsWith(q) ? 1 : n.startsWith(q) ? 2 : (c.includes(q) || n.includes(q)) ? 3 : 9;
+      if (s < 9) items.push([s, d]);
+    }
+    items.sort((a,b) => a[0]-b[0] || a[1].code.localeCompare(b[1].code));
+    items = items.slice(0, 30).map(x => x[1]); idx = items.length ? 0 : -1;
+    list.innerHTML = items.length ? items.map((d,i) => `<div class="it ${i === idx ? 'on' : ''}" data-i="${i}"><span class="cd">${esc(d.code)}</span> · ${esc(d.name)} <span class="sub">(${esc(d.unit || '')})</span></div>`).join('') : '<div class="it sub">ไม่พบ</div>';
+    list.classList.remove('hidden');
+  };
+  const pick = d => { inp.value = `${d.code} · ${d.name}`; inp.dataset.code = d.code; list.classList.add('hidden'); onPick && onPick(d); };
+  inp.addEventListener('input', () => { delete inp.dataset.code; show(); });
+  inp.addEventListener('keydown', e => {
+    if (list.classList.contains('hidden')) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp'){ e.preventDefault(); idx = Math.max(0, Math.min(items.length-1, idx + (e.key === 'ArrowDown' ? 1 : -1))); $$('.it', list).forEach((x,i) => x.classList.toggle('on', i === idx)); }
+    if (e.key === 'Enter' && idx >= 0){ e.preventDefault(); pick(items[idx]); }
+    if (e.key === 'Escape') list.classList.add('hidden');
+  });
+  list.addEventListener('mousedown', e => { const it = e.target.closest('.it[data-i]'); if (it){ e.preventDefault(); pick(items[+it.dataset.i]); } });
+  inp.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 150));
+  return { get code(){ return inp.dataset.code || ''; }, clear(){ inp.value = ''; delete inp.dataset.code; }, focus(){ inp.focus(); } };
+}
+function movesTab(room, d){
+  return `<div class="card">
+    <h3>บันทึกเบิกฉุกเฉิน / ส่งคืน ระหว่างสัปดาห์</h3>
+    <div class="sub" style="margin-bottom:10px">ยอดที่บันทึกที่นี่จะถูกรวมเข้ารอบเบิกถัดไปอัตโนมัติ (หน่วยจ่าย เหมือนยอด Fixed)</div>
+    <form id="mf" class="row" style="align-items:flex-end">
+      <div class="seg" id="mk"><button type="button" class="on" data-k="emerg">เบิกฉุกเฉิน</button><button type="button" data-k="return">ส่งคืนคลัง</button></div>
+      <div class="grow" style="min-width:240px">${drugPicker('mp')}</div>
+      <input type="number" id="mq" placeholder="จำนวน (หน่วยจ่าย)" min="0" step="any" style="width:150px">
+      <input type="text" id="mn" placeholder="หมายเหตุ (ถ้ามี)" style="width:170px">
+      <button class="btn pri">บันทึก</button>
+    </form>
+    <div id="mu" class="sub" style="margin-top:6px"></div>
+  </div>
+  <div class="card" style="padding:0">
+    ${d.moves.length ? `<div class="tw" style="border:0"><table class="t"><thead><tr><th>วันที่</th><th>ประเภท</th><th>รหัส</th><th>รายการ</th><th class="n">จำนวน</th><th>หมายเหตุ</th><th>บันทึกโดย</th><th></th></tr></thead><tbody>
+    ${d.moves.map(m => { const g = drug(m.code); return `<tr><td>${thDateTime(m.created_at)}</td><td>${m.kind === 'emerg' ? '<span class="chip st-submitted">เบิกฉุกเฉิน</span>' : '<span class="chip st-approved">ส่งคืน</span>'}</td>
+      <td class="cd">${esc(m.code)}</td><td class="nm">${esc(g.name)}</td><td class="n">${fmt(m.qty)}</td><td>${esc(m.note || '')}</td><td>${esc(who(m.created_by))}</td>
+      <td>${(m.created_by === S.user.id || can('pharm')) ? `<button class="btn sm bad" onclick="delMove(${m.id})">ลบ</button>` : ''}</td></tr>`; }).join('')}
+    </tbody></table></div>` : '<div class="empty">ยังไม่มีรายการที่รอรวมรอบ</div>'}
+  </div>`;
+}
+function bindMoves(room){
+  let kind = 'emerg';
+  $$('#mk button').forEach(b => b.onclick = () => { kind = b.dataset.k; $$('#mk button').forEach(x => x.classList.toggle('on', x === b)); });
+  const pk = bindPicker('mp', d => { $('#mu').textContent = `หน่วยจ่าย: 1 ${d.unit || 'หน่วยเบิก'} = ${fmt(d.pack)} หน่วยจ่าย`; $('#mq').focus(); });
+  $('#mf').onsubmit = async e => {
+    e.preventDefault();
+    if (!pk.code) return toast('เลือกยาจากรายการก่อน', true);
+    const qty = Number($('#mq').value); if (!(qty > 0)) return toast('ใส่จำนวนให้ถูกต้อง', true);
+    try { await api('addMove', {room, code: pk.code, kind, qty, note: $('#mn').value.trim()}); toast('บันทึกแล้ว'); render(); }
+    catch (er){ toast(errText(er.message), true); }
+  };
+}
+async function delMove(id){ if (!confirm('ลบรายการนี้?')) return; try { await api('delMove', {id}); render(); } catch (e){ toast(errText(e.message), true); } }
+
+// ---------- fixed ----------
+function fixedTab(room, d){
+  const bal = new Map(d.balance.map(b => [b.code, b.qty]));
+  const rows = d.fixed.map(f => ({...drug(f.code), fixed: f.qty, bal: bal.has(f.code) ? bal.get(f.code) : null})).sort((a,b) => a.code.localeCompare(b.code));
+  S.cache.fixedRows = rows;
+  return `<div class="card">
+    <div class="row"><div class="grow"><h3 style="margin:0">Fixed stock และยอดคงเหลือ</h3>
+      <div class="sub">Fixed ${rows.length.toLocaleString()} รายการ · หน่วยเป็น "หน่วยจ่าย" · ยอดคงเหลือ = ยอดยกไปหลังรอบล่าสุดที่อนุมัติ</div></div>
+      ${can('admin') ? `<button class="btn" onclick="importRoomModal('${esc(room)}','fixed')">นำเข้า Fixed จาก Excel</button>
+      <button class="btn" onclick="importRoomModal('${esc(room)}','balance')">นำเข้ายอดตรวจนับ/ยอดยกมา</button>` : ''}
+    </div>
+    ${can('admin') ? `<div class="row" style="margin-top:12px;align-items:flex-end"><div class="grow" style="min-width:240px">${drugPicker('fp','เพิ่ม/แก้ Fixed ของยา…')}</div><input type="number" id="fq" placeholder="Fixed (หน่วยจ่าย)" min="0" step="any" style="width:160px"><button class="btn pri" id="fadd">บันทึก Fixed</button></div>` : ''}
+  </div>
+  <div class="card" style="padding:0">
+    <div class="row" style="padding:12px"><input type="search" id="fs" placeholder="ค้นหารหัส/ชื่อยา" class="grow"><span class="sub" id="fcnt"></span></div>
+    <div class="tw" style="border:0;border-top:1px solid var(--line);border-radius:0"><table class="t"><thead><tr><th>รหัส</th><th>รายการ</th><th>หน่วยเบิก</th><th class="n">หน่วยจ่าย/หน่วยเบิก</th><th class="n">Fixed</th><th class="n">คงเหลือ</th><th>แหล่ง</th></tr></thead><tbody id="fb"></tbody></table></div>
+  </div>`;
+}
+function bindFixed(room){
+  const draw = () => {
+    const q = ($('#fs').value || '').trim().toUpperCase();
+    const rows = S.cache.fixedRows.filter(r => !q || r.code.includes(q) || r.name.toUpperCase().includes(q));
+    $('#fcnt').textContent = `${rows.length.toLocaleString()} รายการ`;
+    $('#fb').innerHTML = rows.length ? rows.map(r => `<tr><td class="cd">${esc(r.code)}</td><td class="nm">${esc(r.name)}</td><td>${esc(r.unit || '')}</td><td class="n">${fmt(r.pack)}</td>
+      <td class="n">${can('admin') ? `<input class="q" type="number" step="any" min="0" value="${r.fixed}" data-c="${esc(r.code)}" data-t="fixed">` : fmt(r.fixed)}</td>
+      <td class="n">${can('admin') ? `<input class="q" type="number" step="any" value="${r.bal ?? ''}" placeholder="=Fixed" data-c="${esc(r.code)}" data-t="balance">` : (r.bal === null ? '<span class="sub">=Fixed</span>' : fmt(r.bal))}</td>
+      <td>${srcChips(r)}</td></tr>`).join('') : '<tr><td colspan="7" class="empty">ไม่มีข้อมูล</td></tr>';
+  };
+  $('#fs').oninput = draw; draw();
+  $('#fb').addEventListener('change', async e => {
+    const i = e.target.closest('input.q'); if (!i) return;
+    try { await api(i.dataset.t === 'fixed' ? 'setFixed' : 'setBalance', {room, code: i.dataset.c, qty: Number(i.value) || 0}); i.classList.add('chg'); toast('บันทึกแล้ว'); const r = S.cache.fixedRows.find(x => x.code === i.dataset.c); if (r) r[i.dataset.t === 'fixed' ? 'fixed' : 'bal'] = Number(i.value) || 0; }
+    catch (er){ toast(errText(er.message), true); }
+  });
+  if (can('admin')){
+    const pk = bindPicker('fp', d => { const r = S.cache.fixedRows.find(x => x.code === d.code); $('#fq').value = r ? r.fixed : ''; $('#fq').focus(); });
+    $('#fadd').onclick = async () => {
+      if (!pk.code) return toast('เลือกยาจากรายการก่อน', true);
+      try { await api('setFixed', {room, code: pk.code, qty: Number($('#fq').value) || 0}); toast('บันทึกแล้ว'); render(); } catch (er){ toast(errText(er.message), true); }
+    };
+  }
+}
+const srcChips = d => `${d.supplier === 'tam' ? '<span class="chip tam">TAM</span>' : '<span class="chip main">คลัง</span>'}${d.buy ? ' <span class="chip buy">ขอซื้อ</span>' : ''}`;
+
+// ---------- report ----------
+async function loadReport(room, n){
+  const el = $('#rep');
+  try {
+    const r = await api('usageReport', {room, n});
+    const fx = new Map(S.cache.room.fixed.map(f => [f.code, f.qty]));
+    const low = Number(ls.get('fs_low') || 1.5), high = Number(ls.get('fs_high') || 6);
+    const rows = [];
+    const codes = new Set([...fx.keys(), ...r.rows.map(x => x.code)]);
+    const um = new Map(r.rows.map(x => [x.code, x]));
+    for (const c of codes){
+      const u = um.get(c) || {avg:0,min:0,max:0,short:0,rounds:0}, f = fx.get(c) || 0;
+      const cover = u.avg > 0 ? f / u.avg : null;
+      let flag = '';
+      if (f > 0 && u.avg > 0 && cover < low) flag = 'low'; else if (f > 0 && r.rounds >= 4 && (u.avg === 0 || cover > high)) flag = 'high'; else if (!f && u.avg > 0) flag = 'nofix';
+      if (u.short) flag = flag || 'low';
+      rows.push({...drug(c), f, ...u, cover, flag});
+    }
+    S.cache.rep = rows;
+    el.innerHTML = `<div class="card">
+      <div class="row"><div class="grow"><h3 style="margin:0">ยอดใช้ย้อนหลัง</h3><div class="sub">คิดจาก ${r.rounds} รอบล่าสุดที่อนุมัติแล้ว · "พอใช้" = Fixed ÷ ยอดใช้เฉลี่ยต่อรอบ (สัปดาห์)${r.rounds < 4 ? ' · ข้อสังเกต "Fixed มากไป" จะเริ่มแสดงเมื่อมีครบ 4 รอบ' : ''}</div></div>
+      <label class="f">จำนวนรอบ<select id="rn">${[4,8,12,26].map(x => `<option ${x === n ? 'selected' : ''}>${x}</option>`).join('')}</select></label>
+      <label class="f">พอใช้น้อยกว่า (สัปดาห์)<input type="number" id="rl" value="${low}" step="0.5" style="width:90px"></label>
+      <label class="f">พอใช้มากกว่า (สัปดาห์)<input type="number" id="rh" value="${high}" step="0.5" style="width:90px"></label></div>
+      ${r.rounds ? '' : '<div class="note warn" style="margin-top:10px">ยังไม่มีรอบที่อนุมัติ รายงานจะมีข้อมูลหลังอนุมัติรอบแรก</div>'}
+      <div class="row" style="margin-top:12px"><div class="seg" id="rf"><button class="on" data-f="flag">ควรทบทวน</button><button data-f="low">Fixed น้อยไป/เคยขาด</button><button data-f="high">Fixed มากไป</button><button data-f="nofix">มียอดใช้แต่ไม่มี Fixed</button><button data-f="all">ทั้งหมด</button></div>
+      <input type="search" id="rs" placeholder="ค้นหา" class="grow"><button class="btn sm" id="rx">ส่งออก Excel</button></div>
+    </div>
+    <div class="card" style="padding:0"><div class="tw" style="border:0"><table class="t"><thead><tr><th>รหัส</th><th>รายการ</th><th class="n">Fixed</th><th class="n">ใช้เฉลี่ย</th><th class="n">ต่ำสุด</th><th class="n">สูงสุด</th><th class="n">พอใช้ (สัปดาห์)</th><th class="n">ครั้งที่ขาด</th><th>ข้อสังเกต</th></tr></thead><tbody id="rb"></tbody></table></div></div>`;
+    let f = 'flag';
+    const FL = {low:'<span class="chip short">Fixed น้อยไป</span>', high:'<span class="chip main">Fixed มากไป</span>', nofix:'<span class="chip buy">ไม่มี Fixed</span>'};
+    const draw = () => {
+      const q = $('#rs').value.trim().toUpperCase();
+      const list = S.cache.rep.filter(x => (f === 'all' || (f === 'flag' ? x.flag : x.flag === f)) && (!q || x.code.includes(q) || x.name.toUpperCase().includes(q))).sort((a,b) => a.code.localeCompare(b.code));
+      $('#rb').innerHTML = list.length ? list.map(x => `<tr><td class="cd">${esc(x.code)}</td><td class="nm">${esc(x.name)}</td><td class="n">${fmt(x.f)}</td><td class="n">${fmt(Math.round(x.avg*10)/10)}</td><td class="n">${fmt(x.min)}</td><td class="n">${fmt(x.max)}</td><td class="n">${x.cover === null ? '-' : fmt(Math.round(x.cover*10)/10)}</td><td class="n">${x.short || ''}</td><td>${FL[x.flag] || ''}</td></tr>`).join('') : '<tr><td colspan="9" class="empty">ไม่มีรายการ</td></tr>';
+    };
+    $$('#rf button').forEach(b => b.onclick = () => { f = b.dataset.f; $$('#rf button').forEach(x => x.classList.toggle('on', x === b)); draw(); });
+    $('#rs').oninput = draw; draw();
+    $('#rn').onchange = () => loadReport(room, Number($('#rn').value));
+    $('#rl').onchange = () => { ls.set('fs_low', $('#rl').value); loadReport(room, n); };
+    $('#rh').onchange = () => { ls.set('fs_high', $('#rh').value); loadReport(room, n); };
+    $('#rx').onclick = () => exportXlsx(`รายงานยอดใช้_${room}.xlsx`, [['รหัส','รายการ','Fixed','ใช้เฉลี่ย','ต่ำสุด','สูงสุด','พอใช้(สัปดาห์)','ครั้งที่ขาด'], ...S.cache.rep.map(x => [x.code, x.name, x.f, x.avg, x.min, x.max, x.cover, x.short])]);
+  } catch (e){ el.innerHTML = `<div class="card err">${esc(errText(e.message))}</div>`; }
+}
+function exportXlsx(name, aoa){
+  if (!window.XLSX) return toast('โหลดตัวอ่าน Excel ไม่สำเร็จ', true);
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Sheet1'); XLSX.writeFile(wb, name);
+}
+
+// ---------- Excel import helpers ----------
+const norm = v => String(v ?? '').replace(/\s+/g, ' ').trim();
+const toNum = v => { if (typeof v === 'number') return v; const t = String(v ?? '').replace(/,/g, '').trim(); return t === '' ? NaN : Number(t); };
+async function readBook(file){
+  if (!window.XLSX) throw new Error('โหลดตัวอ่าน Excel ไม่สำเร็จ (ต้องต่ออินเทอร์เน็ต)');
+  const buf = await file.arrayBuffer();
+  return XLSX.read(buf, {type:'array', cellDates:true});
+}
+function sheetRows(wb, name){ return XLSX.utils.sheet_to_json(wb.Sheets[name], {header:1, raw:true, defval:'', blankrows:false}); }
+function guessHeader(rows){
+  let best = 0, score = -1;
+  for (let i = 0; i < Math.min(rows.length, 25); i++){
+    const r = rows[i] || [];
+    const txt = r.filter(v => typeof v === 'string' && v.trim() && isNaN(Number(v))).length;
+    const kw = r.filter(v => /รหัส|code|จำนวน|qty|quantity|ชื่อ|รายละเอียด|หน่วย|fixed|uom/i.test(String(v))).length;
+    const s = txt + kw * 3;
+    if (s > score){ score = s; best = i; }
+  }
+  return best;
+}
+function colScores(rows, hdr){
+  const head = rows[hdr] || [], width = Math.max(...rows.slice(hdr, hdr + 200).map(r => r.length), head.length);
+  const cols = [];
+  for (let c = 0; c < width; c++){
+    let codeHit = 0, numHit = 0, filled = 0;
+    for (let i = hdr + 1; i < Math.min(rows.length, hdr + 400); i++){
+      const v = (rows[i] || [])[c]; if (v === '' || v === null || v === undefined) continue;
+      filled++;
+      if (S.drugs.has(String(v).trim().toUpperCase())) codeHit++;
+      if (Number.isFinite(toNum(v))) numHit++;
+    }
+    cols.push({c, name: norm(head[c]) || `คอลัมน์ ${XLSX.utils.encode_col(c)}`, codeHit, numHit, filled});
+  }
+  return cols;
+}
+function autoMap(cols, fields){
+  const map = {};
+  const used = new Set();
+  // รหัสยา: คอลัมน์ที่ตรงกับรหัสในระบบมากที่สุด
+  if (fields.code){ const c = [...cols].sort((a,b) => b.codeHit - a.codeHit || (/รหัส|code/i.test(b.name) - /รหัส|code/i.test(a.name)))[0]; if (c){ map.code = c.c; used.add(c.c); } }
+  for (const [k, re] of Object.entries(fields)){
+    if (k === 'code' || !re) continue;
+    for (const rx of (Array.isArray(re) ? re : [re])){
+      const c = cols.find(x => !used.has(x.c) && rx.test(x.name) && (!['qty','pack'].includes(k) || x.numHit > 0));
+      if (c){ map[k] = c.c; used.add(c.c); break; }
+    }
+  }
+  return map;
+}
+/* importWizard: เลือกไฟล์ → ชีต → แถวหัวตาราง → จับคู่คอลัมน์ → คืนค่า rows [{field: value}] */
+function importWizard({title, fields, labels, required, note, extra = '', onRows}){
+  const m = modal(`<h2>${esc(title)}</h2>
+    ${note ? `<div class="note" style="margin-bottom:12px">${note}</div>` : ''}
+    <div class="grid2"><label class="f">ไฟล์ Excel / CSV<input type="file" id="wf" accept=".xlsx,.xls,.csv"></label>
+    <label class="f">ชีต<select id="ws" disabled></select></label></div>
+    <div id="wm" style="margin-top:12px"></div>
+    ${extra}
+    <div class="err" id="we" style="margin-top:8px"></div>
+    <div class="row end" style="margin-top:12px"><button class="btn" id="wc">ยกเลิก</button><button class="btn pri" id="wo" disabled>นำเข้า</button></div>`);
+  let wb = null, rows = [], hdr = 0, map = {}, fileName = '';
+  $('#wc', m).onclick = () => m.close();
+  const drawMap = () => {
+    const cols = colScores(rows, hdr);
+    if (!Object.keys(map).length) map = autoMap(cols, fields);
+    const opt = (k) => `<option value="">— ไม่ใช้ —</option>` + cols.map(c => `<option value="${c.c}" ${map[k] === c.c ? 'selected' : ''}>${esc(c.name)}${c.codeHit ? ` (ตรงรหัสยา ${c.codeHit})` : ''}</option>`).join('');
+    const prev = rows.slice(hdr + 1, hdr + 6);
+    $('#wm', m).innerHTML = `<div class="grid2">
+      <label class="f">แถวหัวตาราง<input type="number" id="wh" min="1" value="${hdr + 1}"></label>
+      ${Object.keys(fields).map(k => `<label class="f">${esc(labels[k])}${required.includes(k) ? ' *' : ''}<select data-k="${k}">${opt(k)}</select></label>`).join('')}
+    </div>
+    <div class="sub" style="margin:10px 0 4px">ตัวอย่าง 5 แถวแรก</div>
+    <div class="tw" style="max-height:200px"><table class="t"><thead><tr>${Object.keys(fields).map(k => `<th>${esc(labels[k])}</th>`).join('')}</tr></thead>
+    <tbody>${prev.map(r => `<tr>${Object.keys(fields).map(k => `<td>${map[k] === undefined ? '' : esc(r[map[k]])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    $('#wh', m).onchange = e => { hdr = Math.max(0, Number(e.target.value) - 1); map = {}; drawMap(); };
+    $$('select[data-k]', m).forEach(s => s.onchange = () => { const v = s.value; if (v === '') delete map[s.dataset.k]; else map[s.dataset.k] = Number(v); drawMap(); });
+    $('#wo', m).disabled = !required.every(k => map[k] !== undefined);
+  };
+  const loadSheet = () => { rows = sheetRows(wb, $('#ws', m).value); hdr = guessHeader(rows); map = {}; drawMap(); };
+  $('#wf', m).onchange = async e => {
+    const f = e.target.files[0]; if (!f) return; fileName = f.name;
+    try {
+      wb = await readBook(f);
+      $('#ws', m).innerHTML = wb.SheetNames.map(n => `<option>${esc(n)}</option>`).join(''); $('#ws', m).disabled = false;
+      // เลือกชีตที่มีรหัสยาตรงมากที่สุด
+      let best = wb.SheetNames[0], bs = -1;
+      for (const n of wb.SheetNames){ const r = sheetRows(wb, n); const h = guessHeader(r); const s = Math.max(0, ...colScores(r, h).map(c => c.codeHit)); if (s > bs){ bs = s; best = n; } }
+      $('#ws', m).value = best; $('#we', m).textContent = ''; loadSheet();
+    } catch (er){ $('#we', m).textContent = er.message; }
+  };
+  $('#ws', m).onchange = loadSheet;
+  $('#wo', m).onclick = async () => {
+    const out = [];
+    for (let i = hdr + 1; i < rows.length; i++){
+      const r = rows[i] || [], o = {};
+      for (const k of Object.keys(map)) o[k] = r[map[k]];
+      if (o.code === undefined || String(o.code).trim() === '') continue;
+      o.code = String(o.code).trim().toUpperCase();
+      out.push(o);
+    }
+    if (!out.length){ $('#we', m).textContent = 'ไม่พบข้อมูลในคอลัมน์ที่เลือก'; return; }
+    const btn = $('#wo', m); btn.disabled = true; btn.innerHTML = '<span class="spin"></span> กำลังนำเข้า';
+    try { await onRows(out, m, fileName, {rows, hdr}); } catch (er){ $('#we', m).textContent = errText(er.message); btn.disabled = false; btn.textContent = 'นำเข้า'; }
+  };
+  return m;
+}
+function importRoomModal(room, kind){
+  const isFix = kind === 'fixed';
+  importWizard({
+    title: isFix ? `นำเข้า Fixed stock — ${roomName(room)}` : `นำเข้ายอดตรวจนับ / ยอดยกมา — ${roomName(room)}`,
+    fields: {code: /รหัส|code/i, qty: isFix ? [/fixed.*จ่าย/i, /fixed/i, /จำนวน|qty|quantity/i] : [/ตรวจนับ/i, /คงเหลือ|bf/i, /ยอด|จำนวน|qty|quantity/i]},
+    labels: {code:'รหัสยา', qty: isFix ? 'Fixed (หน่วยจ่าย)' : 'ยอดนับได้ (หน่วยจ่าย)'},
+    required: ['code','qty'],
+    note: isFix ? 'ใช้ไฟล์ Excel ที่มีคอลัมน์รหัสยา (Hospro/Centrix) และจำนวน Fixed เป็น<b>หน่วยจ่าย</b> เช่น ชีต "FIX STOCK - Detail" คอลัมน์ "Fixed stock (หน่วยจ่ายยา)"'
+                : 'ใช้หลังตรวจนับประจำปี หรือเมื่อเริ่มใช้ระบบครั้งแรก ยอดนี้จะเป็น "ยอดยกมา" ของรอบเบิกถัดไป (ยาที่ไม่มียอดยกมา ระบบจะถือว่าเริ่มต้นเต็ม Fixed)',
+    extra: `<label class="row" style="margin-top:10px;font-size:14px"><input type="checkbox" id="wr" ${isFix ? 'checked' : ''}> ${isFix ? 'แทนที่ Fixed เดิมของห้องนี้ทั้งหมด (ยาที่ไม่อยู่ในไฟล์ = ไม่มี Fixed)' : 'ล้างยอดยกมาเดิมของห้องนี้ก่อน'}</label>
+      <label class="row" style="font-size:14px"><input type="checkbox" id="wsum"> รหัสซ้ำในไฟล์ให้รวมยอด (เช่น นับแยกหลายจุด)</label>`,
+    onRows: async (rows, m) => {
+      const r = await api(isFix ? 'importFixed' : 'importBalance', {room, rows: rows.map(x => ({code:x.code, qty:Number(x.qty) || 0})), replace: $('#wr', m).checked, sum: $('#wsum', m).checked});
+      m.close(); toast(`นำเข้า ${r.n.toLocaleString()} รายการ`);
+      if (r.unknown.length) alert(`ไม่พบรหัสยาในระบบ ${r.unknown.length} รายการ (ข้าม):\n` + r.unknown.slice(0, 60).join(', ') + (r.unknown.length > 60 ? ' …' : ''));
+      render();
+    }
+  });
+}
+
+// ---------- อ่านหัวรายงาน Centrix: ช่วงวันที่ + ชื่อ Store ----------
+function parseDmy(s){
+  const m = String(s).match(/(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/); if (!m) return null;
+  let y = Number(m[3]); if (y > 2400) y -= 543;
+  return `${y}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
+}
+function reportInfo(rows, hdr){
+  const info = {from:null, to:null, stores:[]};
+  for (let i = 0; i < Math.min(hdr, 15); i++){
+    const txt = (rows[i] || []).map(v => String(v ?? '')).join(' ');
+    const ds = [...txt.matchAll(/\d{1,2}[\/-]\d{1,2}[\/-]\d{4}/g)].map(x => x[0]);
+    if (/ข้อมูลวันที่|from date|ถึง|to date/i.test(txt) && ds.length >= 2){ info.from = parseDmy(ds[0]); info.to = parseDmy(ds[1]); }
+  }
+  // แถวชื่อ Store: มีข้อความแค่คอลัมน์แรก และเจอก่อนรายการยา / ขึ้นต้นด้วย Pharmacy
+  const seen = new Set();
+  for (let i = hdr + 1; i < rows.length; i++){
+    const r = rows[i] || [], filled = r.filter(v => String(v ?? '').trim() !== '');
+    if (filled.length === 1 && /pharmacy|store|ห้องยา|คลัง/i.test(String(filled[0]))) seen.add(norm(filled[0]));
+  }
+  info.stores = [...seen];
+  return info;
+}
+const lastStore = d => { const r = (d.rounds || []).find(x => x.status !== 'cancelled' && x.usage_file && x.usage_file.includes(' | ')); return r ? r.usage_file.split(' | ').slice(1).join(' | ') : null; };
+
+// ---------- new round ----------
+async function newRoundView(room){
+  const d = await api('roomData', {room, limit:5});
+  const open = d.rounds.find(r => r.status === 'submitted');
+  if (open) return [`<div class="card"><p>${esc(errText('open_round:' + open.id))}</p><a class="btn pri" href="#/round/${open.id}">เปิดรอบ #${open.id}</a></div>`];
+  const today = new Date(); const dow = (today.getDay() + 6) % 7; // 0 = จันทร์
+  const lastMon = new Date(today); lastMon.setDate(today.getDate() - dow - 7);
+  const lastSun = new Date(lastMon); lastSun.setDate(lastMon.getDate() + 6);
+  S.cache.newRound = {room, d, usage: null};
+  return [`
+  <div class="row" style="margin-bottom:10px"><a href="#/room/${encodeURIComponent(room)}/rounds">← ${esc(roomName(room))}</a></div>
+  <div class="card">
+    <h2>สร้างรอบเบิกใหม่ — ${esc(roomName(room))}</h2>
+    <div class="steps"><span class="on">1. อัปโหลดยอดจ่ายจาก Centrix</span><span>2. ตรวจรายการ</span><span>3. ส่งให้เภสัชกรตรวจ</span></div>
+    <div class="grid2" style="margin-top:12px">
+      <label class="f">ยอดจ่ายตั้งแต่วันที่<input type="date" id="ps" value="${isoDate(lastMon)}"></label>
+      <label class="f">ถึงวันที่<input type="date" id="pe" value="${isoDate(lastSun)}"></label>
+      <label class="f">วันที่เบิก (บนใบเบิก)<input type="date" id="rd" value="${isoDate(today)}"></label>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <button class="btn pri" id="up">📄 เลือกไฟล์ยอดจ่าย (Excel/CSV)</button>
+      <button class="btn" id="nou" title="ไม่มียอดจ่าย เช่น ต้องการเบิกเฉพาะยอดฉุกเฉิน">ไม่มีไฟล์ยอดจ่าย</button>
+      <span class="sub">ไฟล์ export ยอดจ่ายยาของห้องนี้จาก Centrix (รหัสยา + จำนวน)</span>
+    </div>
+  </div>
+  <div id="pv"></div>`, () => bindNewRound(room)];
+}
+function bindNewRound(room){
+  const st = S.cache.newRound;
+  $('#up').onclick = () => importWizard({
+    title: 'อ่านยอดจ่ายจากไฟล์',
+    fields: {code: /รหัส|code/i, qty: [/quantity/i, /จำนวน|qty/i, /ยอด|ใช้|จ่าย/i], name: [/item name|ชื่อ|รายละเอียด/i, /name/i], unit: [/^uom$/i, /หน่วย|unit/i]},
+    labels: {code:'รหัสยา', qty:'จำนวนจ่าย (หน่วยจ่าย)', name:'ชื่อยา (ไม่บังคับ)', unit:'หน่วย (ไม่บังคับ)'},
+    required: ['code','qty'],
+    note: 'แนะนำไฟล์ <b>Dispensing Summary (All Store)</b> จาก Centrix เลือก Store ของห้องนี้ · ระบบหาคอลัมน์ Item Code / Quantity ให้อัตโนมัติ · รหัสซ้ำจะถูกรวมยอด',
+    onRows: async (rows, m, fileName, meta) => {
+      const usage = {}, info2 = {};
+      for (const r of rows){ const q = toNum(r.qty); if (!Number.isFinite(q)) continue; usage[r.code] = (usage[r.code] || 0) + q; if (!info2[r.code]) info2[r.code] = {name: norm(r.name), unit: norm(r.unit)}; }
+      st.fileInfo = info2;
+      const info = reportInfo(meta.rows, meta.hdr);
+      if (info.from) $('#ps').value = info.from;
+      if (info.to) $('#pe').value = info.to;
+      st.usage = usage; st.file = fileName; st.stores = info.stores; m.close(); preview();
+    }
+  });
+  $('#nou').onclick = () => { st.usage = {}; st.file = null; preview(); };
+  const preview = () => {
+    const d = st.d, fx = new Map(d.fixed.map(f => [f.code, f.qty])), bal = new Map(d.balance.map(b => [b.code, b.qty]));
+    const em = {}, rt = {};
+    for (const m of d.moves) (m.kind === 'emerg' ? em : rt)[m.code] = ((m.kind === 'emerg' ? em : rt)[m.code] || 0) + m.qty;
+    const codes = Object.keys(st.usage);
+    const unknown = codes.filter(c => !S.drugs.has(c));
+    const known = codes.filter(c => S.drugs.has(c));
+    const noFix = known.filter(c => !(fx.get(c) > 0));
+    const all = new Set([...fx.keys(), ...known, ...Object.keys(em), ...Object.keys(rt)]);
+    const lines = [];
+    for (const c of all){
+      const G = fx.get(c) || 0, bf = bal.has(c) ? bal.get(c) : G, e = em[c] || 0, t = rt[c] || 0, L = st.usage[c] || 0, g = drug(c);
+      lines.push({code:c, G, bf, e, t, L, rem: bf + e - t - L, s: suggest(G, bf + e - t, L, g.pack), g});
+    }
+    const refill = lines.filter(l => l.s > 0), short = lines.filter(l => l.rem < 0 && l.G > 0);
+    $$('.steps span')[0].className = 'done'; $$('.steps span')[1].className = 'on';
+    $('#pv').innerHTML = `<div class="card">
+      <h3>ผลการคำนวณเบื้องต้น ${st.file ? `<span class="sub">— ${esc(st.file)}</span>` : ''}</h3>
+      <div class="stats">
+        <div class="stat"><b>${known.length.toLocaleString()}</b><span>รหัสยาที่มียอดจ่าย</span></div>
+        <div class="stat"><b>${refill.length.toLocaleString()}</b><span>รายการที่ต้องเติม</span></div>
+        <div class="stat"><b style="color:var(--bad)">${short.length.toLocaleString()}</b><span>ใช้เกินของที่มี (ฉุกเฉิน)</span></div>
+        <div class="stat"><b>${d.moves.length}</b><span>ยอดฉุกเฉิน/คืนที่จะรวม</span></div>
+      </div>
+      ${st.stores && st.stores.length ? `<div class="note" style="margin-bottom:8px">Store ในไฟล์: <b>${esc(st.stores.join(', '))}</b>${st.stores.length > 1 ? ' — <b style="color:var(--bad)">มีหลาย Store ยอดจะถูกรวมกัน ตรวจว่าเลือก Store ถูกห้อง</b>' : ''}</div>` : ''}
+      ${st.stores && st.stores.length && lastStore(st.d) && lastStore(st.d) !== st.stores.join(', ') ? `<div class="note bad" style="margin-bottom:8px">รอบก่อนใช้ Store "<b>${esc(lastStore(st.d))}</b>" แต่ไฟล์นี้เป็น "<b>${esc(st.stores.join(', '))}</b>" — ตรวจว่าไม่ได้ใช้ไฟล์ของห้องอื่น</div>` : ''}
+      ${unknown.length ? `<div class="note bad" style="margin-bottom:8px"><b>ไม่พบรหัสยาในระบบ ${unknown.length} รายการ</b> (จะไม่ถูกนำมาคิด): ${esc(unknown.slice(0, 40).join(', '))}${unknown.length > 40 ? ' …' : ''}
+        ${can('admin') && st.fileInfo ? `<div style="margin-top:8px"><button class="btn sm" id="addu">เพิ่ม ${unknown.length} รหัสนี้เข้ารายการยา</button> <span class="sub">ใช้ชื่อและหน่วยจากไฟล์ (1 หน่วยเบิก = 1 หน่วยจ่าย แก้ภายหลังได้ที่ตั้งค่าระบบ)</span></div>` : ''}</div>` : ''}
+      ${noFix.length ? `<div class="note warn" style="margin-bottom:8px">มียอดจ่ายแต่ไม่มี Fixed ในห้องนี้ ${noFix.length} รายการ — ระบบจะไม่เติมให้อัตโนมัติ (เภสัชกรเพิ่มยอดเองได้ในขั้นตรวจ)</div>` : ''}
+      ${!st.file ? '<div class="note warn" style="margin-bottom:8px">ไม่มีไฟล์ยอดจ่าย — ระบบคิดยอดเติมจากยอดฉุกเฉิน/ส่งคืนเท่านั้น</div>' : ''}
+      <label class="f" style="margin-top:6px">หมายเหตุถึงเภสัชกร (ถ้ามี)<textarea id="nt" rows="2"></textarea></label>
+      <div class="row end" style="margin-top:12px"><button class="btn pri" id="sb">ส่งให้เภสัชกรตรวจ →</button></div>
+    </div>
+    <div class="card" style="padding:0"><div class="row" style="padding:12px"><b class="grow">ตัวอย่างรายการที่ต้องเติม</b><span class="sub">${refill.length} รายการ</span></div>
+    <div class="tw" style="border:0;border-top:1px solid var(--line);border-radius:0;max-height:50vh"><table class="t"><thead><tr><th>รหัส</th><th>รายการ</th><th class="n">Fixed</th><th class="n">ยกมา</th><th class="n">ใช้</th><th class="n">คงเหลือ</th><th class="n">เติม</th><th>หน่วย</th></tr></thead>
+    <tbody>${refill.sort((a,b) => a.code.localeCompare(b.code)).map(l => `<tr class="${l.rem < 0 && l.G > 0 ? 'neg' : ''}"><td class="cd">${esc(l.code)}</td><td class="nm">${esc(l.g.name)}</td><td class="n">${fmt(l.G)}</td><td class="n">${fmt(l.bf)}</td><td class="n">${fmt(l.L)}</td><td class="n">${fmt(l.rem)}</td><td class="n big">${fmt(l.s)}</td><td>${esc(l.g.unit || '')}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">ไม่มีรายการที่ต้องเติม</td></tr>'}</tbody></table></div></div>`;
+    const au = $('#addu'); if (au) au.onclick = async () => {
+      au.disabled = true;
+      try {
+        await api('importDrugs', {keepFlags: true, rows: unknown.map(c => ({code: c, name: (st.fileInfo[c] || {}).name || c, unit: (st.fileInfo[c] || {}).unit || null, pack: 1}))});
+        await boot(); toast(`เพิ่ม ${unknown.length} รายการแล้ว`); preview();
+      } catch (e){ toast(errText(e.message), true); au.disabled = false; }
+    };
+    $('#sb').onclick = async () => {
+      const btn = $('#sb'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span> กำลังสร้างรอบ';
+      try {
+        const r = await api('createRound', {room, usage: st.usage, file: st.file ? st.file + (st.stores && st.stores.length ? ' | ' + st.stores.join(', ') : '') : null, period_start: $('#ps').value, period_end: $('#pe').value, req_date: $('#rd').value, note: $('#nt').value.trim()});
+        toast(`สร้างรอบ #${r.id} แล้ว`); go(`#/round/${r.id}`);
+      } catch (er){ toast(errText(er.message), true); btn.disabled = false; btn.textContent = 'ส่งให้เภสัชกรตรวจ →'; }
+    };
+  };
+}
+
+// ---------- round detail ----------
+async function roundView(id){
+  const d = await api('round', {id});
+  const r = d.round; S.curRoundRoom = r.room;
+  const lines = d.lines.map(l => { const g = drug(l.code); const K = l.bf + l.emerg - l.ret; return {...l, g, K, rem: K - l.usage, short: K - l.usage < 0 && l.fixed > 0, final: l.adjust ?? l.suggest}; });
+  lines.sort((a,b) => a.code.localeCompare(b.code));
+  S.cache.round = {r, lines, moves: d.moves, edits: {}, adds: []};
+  const editable = r.status === 'submitted' && can('pharm');
+  const cnt = k => lines.filter(l => l.final > 0 && formOf(l.g) === k).length;
+  const refillN = lines.filter(l => l.final > 0).length, shortN = lines.filter(l => l.short).length, adjN = lines.filter(l => l.adjust !== null && l.adjust !== l.suggest).length;
+  const steps = ['submitted','approved','received'], si = steps.indexOf(r.status);
+  return [`
+  <div class="row" style="margin-bottom:10px"><a href="#/room/${encodeURIComponent(r.room)}/rounds">← ${esc(roomName(r.room))}</a></div>
+  <div class="card">
+    <div class="row"><div class="grow"><h2>รอบเบิก #${r.id} — ${esc(roomName(r.room))} <span class="chip st-${r.status}">${ST_TH[r.status]}</span></h2>
+      <div class="sub">ยอดจ่าย ${thDate(r.period_start)} – ${thDate(r.period_end)} · วันที่เบิก ${thDate(r.req_date)}${r.usage_file ? ` · ไฟล์ ${esc(r.usage_file)}` : ''}</div></div>
+      <button class="btn" onclick="printModal()">🖨 พิมพ์ใบเบิก</button>
+      <button class="btn" onclick="exportRound()">ส่งออก Excel</button>
+    </div>
+    ${r.status !== 'cancelled' ? `<div class="steps" style="margin-top:10px">
+      <span class="done">ส่งยอด · ${esc(who(r.created_by))} ${thDateTime(r.created_at)}</span>
+      <span class="${si >= 1 ? 'done' : 'on'}">เภสัชกรตรวจ/อนุมัติ${r.approved_by ? ` · ${esc(who(r.approved_by))} ${thDateTime(r.approved_at)}` : ''}</span>
+      <span class="${si >= 2 ? 'done' : si === 1 ? 'on' : ''}">ห้องยารับยา${r.received_by ? ` · ${esc(who(r.received_by))} ${thDateTime(r.received_at)}` : ''}</span></div>`
+      : `<div class="note" style="margin-top:10px">ยกเลิกโดย ${esc(who(r.cancelled_by))} ${thDateTime(r.cancelled_at)}</div>`}
+    ${r.note ? `<div class="note" style="margin-top:10px">หมายเหตุ: ${esc(r.note)}</div>` : ''}
+    <div class="stats">
+      <div class="stat"><b>${refillN}</b><span>รายการที่เบิก</span></div>
+      ${FORMS.map(f => `<div class="stat"><b>${cnt(f.key)}</b><span>ใบ${f.short}</span></div>`).join('')}
+      <div class="stat"><b style="color:var(--bad)">${shortN}</b><span>ใช้เกินของที่มี</span></div>
+    </div>
+    <div class="row end">
+      ${r.status === 'submitted' && (r.created_by === S.user.id || can('pharm')) ? '<button class="btn bad" id="cx">ยกเลิกรอบนี้</button>' : ''}
+      ${editable ? '<button class="btn" id="sv" disabled>บันทึกการแก้ไข</button><button class="btn ok" id="ap">✓ อนุมัติ</button>' : ''}
+      ${r.status === 'submitted' && !can('pharm') ? '<span class="sub">รอเภสัชกรตรวจและอนุมัติ</span>' : ''}
+      ${r.status === 'approved' ? '<button class="btn ok" id="rc">ยืนยันรับยาครบแล้ว</button>' : ''}
+    </div>
+  </div>
+  <div class="card" style="padding:0">
+    <div class="row" style="padding:12px">
+      <div class="seg" id="lf"><button class="on" data-f="refill">ที่เบิก (${refillN})</button><button data-f="short">ใช้เกิน (${shortN})</button>${adjN ? `<button data-f="adj">แก้ยอด (${adjN})</button>` : ''}<button data-f="all">ทั้งหมด (${lines.length})</button></div>
+      <select id="lsrc"><option value="">ทุกใบเบิก</option>${FORMS.map(f => `<option value="${f.key}">${f.short}</option>`).join('')}</select>
+      <input type="search" id="lq" placeholder="ค้นหารหัส/ชื่อยา" class="grow">
+    </div>
+    ${editable ? `<div class="row" style="padding:0 12px 12px;align-items:flex-end"><div class="grow" style="min-width:240px">${drugPicker('ap2','เพิ่มยาที่ไม่อยู่ในรอบ…')}</div><input type="number" id="aq" placeholder="จำนวน (หน่วยเบิก)" min="0" step="1" style="width:150px"><button class="btn" id="aadd">เพิ่ม</button></div>` : ''}
+    <div class="tw" style="border:0;border-top:1px solid var(--line);border-radius:0"><table class="t">
+      <thead><tr><th>รหัส</th><th>รายการ</th><th class="n">Fixed</th><th class="n">ยกมา</th><th class="n">ฉุกเฉิน</th><th class="n">คืน</th><th class="n">ใช้</th><th class="n">คงเหลือ</th><th class="n">ระบบแนะนำ</th><th class="n">เบิกจริง</th><th>หน่วยเบิก</th><th>ใบเบิก</th>${r.cf !== undefined && r.status !== 'submitted' ? '<th class="n">ยอดยกไป</th>' : ''}</tr></thead>
+      <tbody id="lb"></tbody></table></div>
+  </div>
+  ${d.moves.length ? `<div class="card"><h3>ยอดฉุกเฉิน / ส่งคืนที่รวมในรอบนี้</h3><div class="tw"><table class="t"><thead><tr><th>วันที่</th><th>ประเภท</th><th>รหัส</th><th>รายการ</th><th class="n">จำนวน</th><th>หมายเหตุ</th><th>บันทึกโดย</th></tr></thead><tbody>
+    ${d.moves.map(m => `<tr><td>${thDateTime(m.created_at)}</td><td>${m.kind === 'emerg' ? 'เบิกฉุกเฉิน' : 'ส่งคืน'}</td><td class="cd">${esc(m.code)}</td><td class="nm">${esc(drug(m.code).name)}</td><td class="n">${fmt(m.qty)}</td><td>${esc(m.note || '')}</td><td>${esc(who(m.created_by))}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
+  `, () => bindRound(editable)];
+}
+const formOf = g => (g.supplier === 'tam' ? 'tam' : 'main') + (g.buy ? 'buy' : '');
+const formShort = k => (FORMS.find(f => f.key === k) || {}).short || '';
+function bindRound(editable){
+  const st = S.cache.round, r = st.r;
+  let f = 'refill';
+  const showCf = r.status !== 'submitted';
+  const draw = () => {
+    const q = $('#lq').value.trim().toUpperCase(), src = $('#lsrc').value;
+    const list = st.lines.filter(l => {
+      const fin = st.edits[l.code] !== undefined ? (st.edits[l.code] === null ? l.suggest : st.edits[l.code]) : l.final;
+      if (f === 'refill' && !(fin > 0) && st.edits[l.code] === undefined) return false;
+      if (f === 'short' && !l.short) return false;
+      if (f === 'adj' && !(l.adjust !== null && l.adjust !== l.suggest)) return false;
+      if (src && formOf(l.g) !== src) return false;
+      return !q || l.code.includes(q) || l.g.name.toUpperCase().includes(q);
+    });
+    $('#lb').innerHTML = list.length ? list.map(l => {
+      const ed = st.edits[l.code];
+      const val = ed !== undefined ? (ed === null ? l.suggest : ed) : l.final;
+      return `<tr class="${l.short ? 'neg' : ''}"><td class="cd">${esc(l.code)}</td><td class="nm">${esc(l.g.name)}</td>
+      <td class="n">${fmt(l.fixed)}</td><td class="n">${fmt(l.bf)}</td><td class="n">${l.emerg ? fmt(l.emerg) : ''}</td><td class="n">${l.ret ? fmt(l.ret) : ''}</td>
+      <td class="n">${fmt(l.usage)}</td><td class="n">${fmt(l.rem)}${l.short ? ' <span class="chip short">ขาด</span>' : ''}</td>
+      <td class="n">${fmt(l.suggest)}</td>
+      <td class="n">${editable ? `<input class="q ${ed !== undefined || (l.adjust !== null && l.adjust !== l.suggest) ? 'chg' : ''}" type="number" min="0" step="1" value="${val}" data-c="${esc(l.code)}">` : `<b>${fmt(l.final)}</b>${l.adjust !== null && l.adjust !== l.suggest ? ' <span class="chip buy" title="เภสัชกรแก้จาก ' + fmt(l.suggest) + '">แก้</span>' : ''}`}</td>
+      <td>${esc(l.g.unit || '')} <span class="sub">×${fmt(l.g.pack)}</span></td><td>${srcChips(l.g)}</td>
+      ${showCf ? `<td class="n">${fmt(l.cf)}</td>` : ''}</tr>`;
+    }).join('') : `<tr><td colspan="13" class="empty">ไม่มีรายการ</td></tr>`;
+  };
+  $$('#lf button').forEach(b => b.onclick = () => { f = b.dataset.f; $$('#lf button').forEach(x => x.classList.toggle('on', x === b)); draw(); });
+  $('#lq').oninput = draw; $('#lsrc').onchange = draw; draw();
+  if (editable){
+    const dirty = () => { const n = Object.keys(st.edits).length + st.adds.length; $('#sv').disabled = !n; $('#sv').textContent = n ? `บันทึกการแก้ไข (${n})` : 'บันทึกการแก้ไข'; };
+    $('#lb').addEventListener('input', e => {
+      const i = e.target.closest('input.q'); if (!i) return;
+      const l = st.lines.find(x => x.code === i.dataset.c), v = i.value === '' ? null : Math.max(0, Math.round(Number(i.value)));
+      const orig = l.adjust ?? l.suggest;
+      if (v === orig || (v === null && l.adjust === null)) delete st.edits[l.code]; else st.edits[l.code] = v === l.suggest ? null : v;
+      i.classList.add('chg'); dirty();
+    });
+    const pk = bindPicker('ap2');
+    $('#aadd').onclick = () => {
+      if (!pk.code) return toast('เลือกยาจากรายการก่อน', true);
+      const q = Math.round(Number($('#aq').value)); if (!(q > 0)) return toast('ใส่จำนวนหน่วยเบิก', true);
+      const ex = st.lines.find(l => l.code === pk.code);
+      if (ex){ st.edits[ex.code] = q; } else { st.adds.push({code: pk.code, qty: q}); const g = drug(pk.code); st.lines.push({code: pk.code, g, fixed:0, bf:0, emerg:0, ret:0, usage:0, K:0, rem:0, short:false, suggest:0, adjust:q, final:q, cf:null}); st.lines.sort((a,b) => a.code.localeCompare(b.code)); }
+      pk.clear(); $('#aq').value = ''; dirty(); draw(); toast('เพิ่มแล้ว อย่าลืมกดบันทึก');
+    };
+    const save = async () => {
+      const changes = {}; for (const [c, v] of Object.entries(st.edits)) changes[c] = v;
+      if (!Object.keys(changes).length && !st.adds.length) return true;
+      await api('saveAdjust', {id: r.id, changes, add: st.adds});
+      return true;
+    };
+    $('#sv').onclick = async () => { try { await save(); toast('บันทึกแล้ว'); render(); } catch (e){ toast(errText(e.message), true); } };
+    $('#ap').onclick = async () => {
+      const n = st.lines.filter(l => { const ed = st.edits[l.code]; const v = ed !== undefined ? (ed === null ? l.suggest : ed) : l.final; return v > 0; }).length;
+      if (!confirm(`อนุมัติรอบเบิก #${r.id} จำนวน ${n} รายการ?\nระบบจะบันทึกยอดยกไปของห้องยาทันที และแก้ยอดไม่ได้อีก`)) return;
+      try { await save(); await api('approve', {id: r.id}); toast('อนุมัติแล้ว'); render(); } catch (e){ toast(errText(e.message), true); }
+    };
+    window.onbeforeunload = () => (Object.keys(st.edits).length || st.adds.length) ? 'มีการแก้ไขที่ยังไม่บันทึก' : undefined;
+  } else window.onbeforeunload = null;
+  const cx = $('#cx'); if (cx) cx.onclick = async () => { if (!confirm('ยกเลิกรอบเบิกนี้? ยอดฉุกเฉิน/คืนที่รวมไว้จะกลับไปรอรอบถัดไป')) return; try { await api('cancelRound', {id: r.id}); toast('ยกเลิกแล้ว'); go(`#/room/${encodeURIComponent(r.room)}/rounds`); } catch (e){ toast(errText(e.message), true); } };
+  const rc = $('#rc'); if (rc) rc.onclick = async () => { if (!confirm('ยืนยันว่าได้รับยาครบตามใบเบิกแล้ว?')) return; try { await api('receive', {id: r.id}); toast('บันทึกรับยาแล้ว'); render(); } catch (e){ toast(errText(e.message), true); } };
+}
+function exportRound(){
+  const {r, lines} = S.cache.round;
+  exportXlsx(`รอบเบิก_${r.room}_${r.id}.xlsx`, [['รหัส','รายการ','หน่วยเบิก','หน่วยจ่าย/หน่วยเบิก','Fixed','ยกมา','ฉุกเฉิน','คืน','ใช้','คงเหลือ','ระบบแนะนำ','เบิกจริง','ใบเบิก','ยอดยกไป'],
+    ...lines.map(l => [l.code, l.g.name, l.g.unit, l.g.pack, l.fixed, l.bf, l.emerg, l.ret, l.usage, l.rem, l.suggest, l.final, formShort(formOf(l.g)), l.cf])]);
+}
+function printModal(){
+  const {r, lines} = S.cache.round;
+  const st = S.cache.round;
+  const items = lines.map(l => { const ed = st.edits[l.code]; return {...l, q: ed !== undefined ? (ed === null ? l.suggest : ed) : l.final}; }).filter(l => l.q > 0);
+  const by = k => items.filter(l => formOf(l.g) === k);
+  const m = modal(`<h2>พิมพ์ใบเบิก — รอบ #${r.id}</h2>
+    ${r.status === 'submitted' ? '<div class="note warn" style="margin-bottom:10px">รอบนี้ยังไม่อนุมัติ ใบเบิกจะมีคำว่า "ฉบับร่าง"</div>' : ''}
+    ${FORMS.map(f => `<label class="row" style="padding:6px 0"><input type="checkbox" value="${f.key}" ${by(f.key).length ? 'checked' : 'disabled'}> ใบ${f.short} <span class="sub">(${by(f.key).length} รายการ)</span></label>`).join('')}
+    <div class="row end" style="margin-top:12px"><button class="btn" id="pc">ยกเลิก</button><button class="btn pri" id="pp">พิมพ์</button></div>`);
+  $('#pc', m).onclick = () => m.close();
+  $('#pp', m).onclick = () => {
+    const keys = $$('input:checked', m).map(i => i.value);
+    if (!keys.length) return toast('เลือกอย่างน้อย 1 ใบ', true);
+    const draft = r.status === 'submitted' ? ' (ฉบับร่าง)' : '';
+    $('#print').innerHTML = keys.map(k => { const f = FORMS.find(x => x.key === k), list = by(k); return `<section class="pf">
+      <h1>${esc(f.title)}${draft}</h1>
+      <div class="hd"><div>เบิกจากหน่วยงาน: <b>${esc(f.from)}</b></div><div>เลขที่ใบเบิก: <b>FS${r.id}-${k.toUpperCase()}</b></div>
+      <div>หน่วยงานที่ขอเบิก: <b>จ่ายยาผู้ป่วย ${esc(roomName(r.room))}</b> ${HOSPITAL}</div><div>วันที่: <b>${thDate(r.req_date)}</b> · ยอดจ่าย ${thDate(r.period_start)}–${thDate(r.period_end)}</div></div>
+      <table><thead><tr><th style="width:36px">No</th><th style="width:90px">รหัสสินค้า</th><th>รายละเอียด</th><th style="width:90px">หน่วยนับ</th><th style="width:60px">จำนวน</th><th style="width:60px">จ่ายจริง</th><th style="width:90px">หมายเหตุ</th></tr></thead>
+      <tbody>${list.map((l, i) => `<tr><td class="c">${i + 1}</td><td>${esc(l.code)}</td><td>${esc(l.g.name)}</td><td>${esc(l.g.unit || '')}</td><td class="n"><b>${fmt(l.q)}</b></td><td></td><td>${l.short ? 'ใช้เกิน' : ''}</td></tr>`).join('')}</tbody></table>
+      <div class="sig"><div>ผู้เบิก<br>${esc(who(r.created_by))}</div><div>หัวหน้าแผนก</div><div>ผู้จ่ายของ</div><div>ผู้รับของ</div><div>ผู้มีอำนาจอนุมัติ<br>${r.approved_by ? esc(who(r.approved_by)) : ''}</div></div>
+      <div class="ft"><span>ระบบเบิกยาห้องยา · รอบ #${r.id} · ${list.length} รายการ</span><span>พิมพ์ ${thDateTime(new Date())}</span></div>
+    </section>`; }).join('');
+    m.close(); setTimeout(() => window.print(), 50);
+  };
+}
+
+// ---------- admin ----------
+async function adminView(tab){
+  if (!can('admin')) return ['<div class="card">เฉพาะผู้ดูแลระบบ</div>'];
+  const tabs = [['drugs','รายการยา'],['roles','สิทธิ์ผู้ใช้'],['rooms','ห้องยา']];
+  const head = `<h2 style="margin:0 0 10px;font-size:21px">ตั้งค่าระบบ</h2><div class="tabs">${tabs.map(([k,t]) => `<a href="#/admin/${k}" class="${tab === k ? 'on' : ''}">${t}</a>`).join('')}</div>`;
+  if (tab === 'roles'){
+    const s = await api('staffList');
+    return [head + `<div class="card"><h3>สิทธิ์ในระบบเบิกยาห้องยา</h3><div class="sub" style="margin-bottom:10px">บัญชีพนักงานใช้ร่วมกับระบบเบิกพัสดุ (เพิ่ม/ลบพนักงานที่ระบบเบิกพัสดุ) แต่สิทธิ์ตั้งแยกได้ที่นี่<br>
+      <b>เจ้าหน้าที่</b>: สร้างรอบเบิก บันทึกฉุกเฉิน/คืน ยืนยันรับยา · <b>เภสัชกร</b>: + แก้ยอดและอนุมัติ · <b>ผู้ดูแลระบบ</b>: + ตั้งค่า Fixed รายการยา และสิทธิ์</div>
+      <input type="search" id="sq" placeholder="ค้นหา" style="width:100%;margin-bottom:10px">
+      <div class="tw"><table class="t"><thead><tr><th>รหัสพนักงาน</th><th>ชื่อ</th><th>สิทธิ์</th></tr></thead><tbody id="sb">
+      ${s.staff.map(x => `<tr data-s="${esc((x.id + ' ' + x.first + ' ' + x.last).toUpperCase())}"><td>${esc(x.id)}</td><td>${esc(x.first)} ${esc(x.last)}</td><td><select data-id="${esc(x.id)}">${Object.entries(ROLE_TH).map(([k,v]) => `<option value="${k}" ${x.role === k ? 'selected' : ''}>${v}</option>`).join('')}</select></td></tr>`).join('')}
+      </tbody></table></div></div>`, () => {
+        $('#sq').oninput = () => { const q = $('#sq').value.trim().toUpperCase(); $$('#sb tr').forEach(tr => tr.classList.toggle('hidden', !!q && !tr.dataset.s.includes(q))); };
+        $('#sb').onchange = async e => { const s = e.target; try { await api('setRole', {emp_id: s.dataset.id, role: s.value}); toast('บันทึกสิทธิ์แล้ว'); if (s.dataset.id === S.user.id){ S.user = null; render(); } } catch (er){ toast(errText(er.message), true); render(); } };
+      }];
+  }
+  if (tab === 'rooms'){
+    return [head + `<div class="card"><h3>ห้องยา</h3><div class="tw"><table class="t"><thead><tr><th>รหัส</th><th>ชื่อที่แสดง</th><th>ลำดับ</th><th>ใช้งาน</th><th></th></tr></thead><tbody>
+      ${S.allRooms.map(r => `<tr><td class="cd">${esc(r.code)}</td><td><input type="text" value="${esc(r.name)}" data-f="name"></td><td><input type="number" value="${r.sort}" data-f="sort" style="width:70px"></td><td><input type="checkbox" data-f="active" ${r.active ? 'checked' : ''}></td><td><button class="btn sm" data-code="${esc(r.code)}">บันทึก</button></td></tr>`).join('')}
+      <tr><td><input type="text" id="nrc" placeholder="รหัส" style="width:80px"></td><td><input type="text" id="nrn" placeholder="ชื่อห้องยา"></td><td><input type="number" id="nrs" value="${S.allRooms.length + 1}" style="width:70px"></td><td></td><td><button class="btn sm pri" id="nra">เพิ่มห้อง</button></td></tr>
+      </tbody></table></div></div>`, () => {
+        $$('button[data-code]').forEach(b => b.onclick = async () => { const tr = b.closest('tr'); try { await api('setRoom', {code: b.dataset.code, name: $('[data-f=name]', tr).value, sort: Number($('[data-f=sort]', tr).value), active: $('[data-f=active]', tr).checked}); toast('บันทึกแล้ว'); S.user = null; render(); } catch (e){ toast(errText(e.message), true); } });
+        $('#nra').onclick = async () => { try { await api('setRoom', {code: $('#nrc').value.trim(), name: $('#nrn').value.trim(), sort: Number($('#nrs').value)}); toast('เพิ่มแล้ว'); S.user = null; render(); } catch (e){ toast(errText(e.message), true); } };
+      }];
+  }
+  // drugs
+  return [head + `<div class="card">
+    <div class="row"><div class="grow"><h3 style="margin:0">รายการยาหลัก</h3><div class="sub">${S.drugs.size.toLocaleString()} รายการ · "หน่วยจ่าย/หน่วยเบิก" = จำนวนหน่วยจ่ายใน 1 หน่วยเบิก (คอลัมน์ D ใน Excel เดิม)</div></div>
+    <button class="btn" id="di">นำเข้าจาก Excel</button><button class="btn" id="dx">ส่งออก Excel</button><button class="btn pri" id="dn">＋ เพิ่มยา</button></div>
+  </div>
+  ${S.drugs.size === 0 ? `<div class="card" style="border-color:var(--pri)"><h3>เริ่มต้นใช้งาน: ยังไม่มีรายการยา</h3>
+    <p class="sub" style="margin:0 0 10px">โหลดรายการยาตั้งต้นจากไฟล์ Fixed stock PHAR 3 (2,867 รายการ พร้อมหน่วยเบิก จำนวนต่อหน่วย และแหล่ง TAM/ขอซื้อ) แล้วค่อยแก้หรือนำเข้าเพิ่มภายหลัง</p>
+    <button class="btn pri" id="dseed">โหลดรายการยาตั้งต้น</button></div>` : ''}
+  <div class="card" style="padding:0">
+    <div class="row" style="padding:12px"><input type="search" id="dq" placeholder="ค้นหารหัส/ชื่อยา" class="grow">
+      <select id="dsf"><option value="">ทุกแหล่ง</option>${FORMS.map(f => `<option value="${f.key}">${f.short}</option>`).join('')}<option value="off">ปิดใช้งาน</option></select><span class="sub" id="dc"></span></div>
+    <div class="tw" style="border:0;border-top:1px solid var(--line);border-radius:0"><table class="t"><thead><tr><th>รหัส</th><th class="hide-m">รหัส PS</th><th>รายการ</th><th>หน่วยเบิก</th><th class="n">หน่วยจ่าย/หน่วยเบิก</th><th>แหล่ง</th><th></th></tr></thead><tbody id="db"></tbody></table></div>
+  </div>`, bindDrugs];
+}
+function bindDrugs(){
+  const draw = () => {
+    const q = $('#dq').value.trim().toUpperCase(), sf = $('#dsf').value;
+    let list = [...S.drugs.values()].filter(d => (sf === 'off' ? !d.active : (!sf || (d.active && formOf(d) === sf))) && (!q || d.code.includes(q) || d.name.toUpperCase().includes(q)));
+    list.sort((a,b) => a.code.localeCompare(b.code));
+    $('#dc').textContent = `${list.length.toLocaleString()} รายการ`;
+    const show = list.slice(0, 300);
+    $('#db').innerHTML = show.map(d => `<tr class="${d.active ? '' : 'neg'}"><td class="cd">${esc(d.code)}</td><td class="hide-m">${esc(d.ps_code || '')}</td><td class="nm">${esc(d.name)}</td><td>${esc(d.unit || '')}</td><td class="n">${fmt(d.pack)}</td><td>${srcChips(d)}${d.active ? '' : ' <span class="chip st-cancelled">ปิด</span>'}</td><td><button class="btn sm" data-c="${esc(d.code)}">แก้ไข</button></td></tr>`).join('') + (list.length > 300 ? `<tr><td colspan="7" class="empty">แสดง 300 จาก ${list.length.toLocaleString()} รายการ — พิมพ์ค้นหาเพื่อกรอง</td></tr>` : '');
+  };
+  $('#dq').oninput = draw; $('#dsf').onchange = draw; draw();
+  $('#db').onclick = e => { const b = e.target.closest('button[data-c]'); if (b) drugModal(S.drugs.get(b.dataset.c)); };
+  $('#dn').onclick = () => drugModal(null);
+  const sd = $('#dseed'); if (sd) sd.onclick = async () => {
+    sd.disabled = true; sd.innerHTML = '<span class="spin"></span> กำลังโหลด';
+    try {
+      const j = await (await fetch('seed-drugs.json', {cache:'no-store'})).json();
+      const rows = j.rows.map(r => Object.fromEntries(j.cols.map((c, i) => [c, r[i]])));
+      for (let i = 0; i < rows.length; i += 1500) await api('importDrugs', {rows: rows.slice(i, i + 1500)});
+      toast(`โหลด ${rows.length.toLocaleString()} รายการแล้ว`); S.user = null; render();
+    } catch (e){ toast(errText(e.message), true); sd.disabled = false; sd.textContent = 'โหลดรายการยาตั้งต้น'; }
+  };
+  $('#dx').onclick = () => exportXlsx('รายการยา.xlsx', [['รหัส','รหัส PS','รายการ','หน่วยจ่าย/หน่วยเบิก','หน่วยเบิก','แหล่ง','ขอซื้อ','ใช้งาน'], ...[...S.drugs.values()].map(d => [d.code, d.ps_code, d.name, d.pack, d.unit, d.supplier === 'tam' ? 'TAM' : 'คลัง', d.buy ? 'Y' : '', d.active ? 'Y' : 'N'])]);
+  $('#di').onclick = () => importWizard({
+    title: 'นำเข้ารายการยาจาก Excel',
+    fields: {code: /รหัส|code/i, ps_code: /\(PS\)|รหัส PS/i, name: [/รายละเอียด|ชื่อ/i, /name/i], pack: [/จำนวน\/หน่วย|ต่อหน่วย/i, /pack/i], unit: [/^หน่วย(จ่าย|นับ|เบิก)?$/i, /uom|unit/i], supplier: /แหล่ง|^tam$|supplier/i, buy: /ขอซื้อ|buy/i},
+    labels: {code:'รหัสยา', ps_code:'รหัส PS', name:'ชื่อ/รายละเอียด', pack:'หน่วยจ่าย/หน่วยเบิก', unit:'หน่วยเบิก', supplier:'แหล่ง (TAM/คลัง)', buy:'ขอซื้อ (Y)'},
+    required: ['code','name'],
+    note: 'รหัสที่มีอยู่แล้วจะถูกอัปเดต รหัสใหม่จะถูกเพิ่ม · คอลัมน์แหล่ง: มีค่า (เช่น TAM) = ไทยแอมดอน, ว่าง/คลัง = คลังยา · ขอซื้อ: Y/1/TRUE',
+    extra: '<label class="row" style="margin-top:10px;font-size:14px"><input type="checkbox" id="wk" checked> ไม่เปลี่ยนแหล่ง/ขอซื้อของยาที่มีอยู่แล้ว (อัปเดตเฉพาะชื่อ หน่วย จำนวนต่อหน่วย)</label>',
+    onRows: async (rows, m) => {
+      const yes = v => /^(y|yes|1|true|ใช่|✓)$/i.test(String(v ?? '').trim());
+      const isTam = v => { const t = String(v ?? '').trim(); return t !== '' && !/^(คลัง|คลังยา|main|0|n|no|false|-)$/i.test(t); };
+      const payload = rows.map(r => ({code: r.code, ps_code: r.ps_code, name: r.name, pack: r.pack, unit: r.unit, supplier: isTam(r.supplier) ? 'tam' : 'main', buy: yes(r.buy)}));
+      let n = 0;
+      for (let i = 0; i < payload.length; i += 1500){ const x = await api('importDrugs', {rows: payload.slice(i, i + 1500), keepFlags: $('#wk', m).checked}); n += x.n; }
+      m.close(); toast(`นำเข้า ${n.toLocaleString()} รายการ`); S.user = null; render();
+    }
+  });
+}
+function drugModal(d){
+  const isNew = !d; d = d || {code:'', ps_code:'', name:'', pack:1, unit:'', supplier:'main', buy:false, active:true};
+  const m = modal(`<h2>${isNew ? 'เพิ่มยา' : 'แก้ไขยา ' + esc(d.code)}</h2>
+    <form id="dm" class="grid2">
+      <label class="f">รหัสยา *<input type="text" id="d_code" value="${esc(d.code)}" ${isNew ? '' : 'readonly'} required></label>
+      <label class="f">รหัส PS<input type="text" id="d_ps" value="${esc(d.ps_code || '')}"></label>
+      <label class="f" style="grid-column:1/-1">ชื่อ/รายละเอียด *<input type="text" id="d_name" value="${esc(d.name)}" required></label>
+      <label class="f">หน่วยเบิก (หน่วยนับบนใบเบิก)<input type="text" id="d_unit" value="${esc(d.unit || '')}"></label>
+      <label class="f">หน่วยจ่าย ต่อ 1 หน่วยเบิก<input type="number" id="d_pack" value="${d.pack}" min="0.0001" step="any"></label>
+      <label class="f">แหล่งเบิก<select id="d_sup"><option value="main" ${d.supplier !== 'tam' ? 'selected' : ''}>คลังยา</option><option value="tam" ${d.supplier === 'tam' ? 'selected' : ''}>TAM (ไทยแอมดอน)</option></select></label>
+      <div style="display:flex;flex-direction:column;gap:6px;justify-content:flex-end">
+        <label class="row" style="font-size:14px"><input type="checkbox" id="d_buy" ${d.buy ? 'checked' : ''}> ขอซื้อ (แยกใบขอซื้อ)</label>
+        <label class="row" style="font-size:14px"><input type="checkbox" id="d_act" ${d.active ? 'checked' : ''}> ใช้งาน</label></div>
+      <div class="row end" style="grid-column:1/-1"><button type="button" class="btn" id="dmc">ยกเลิก</button><button class="btn pri">บันทึก</button></div>
+    </form>`);
+  $('#dmc', m).onclick = () => m.close();
+  $('#dm', m).onsubmit = async e => {
+    e.preventDefault();
+    try {
+      await api('setDrug', {drug: {code: $('#d_code', m).value, ps_code: $('#d_ps', m).value.trim(), name: $('#d_name', m).value, unit: $('#d_unit', m).value.trim(), pack: Number($('#d_pack', m).value), supplier: $('#d_sup', m).value, buy: $('#d_buy', m).checked, active: $('#d_act', m).checked}});
+      m.close(); toast('บันทึกแล้ว'); S.user = null; render();
+    } catch (er){ toast(errText(er.message), true); }
+  };
+}
+
+render();
+</script>
+</body>
+</html>
